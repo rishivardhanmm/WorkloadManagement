@@ -23,9 +23,15 @@ class AcademicListCreateView(ListCreateAPIView):
 
 
 class AcademicDetailView(RetrieveUpdateDestroyAPIView):
-    queryset = Academic.objects.select_related("department").all()
+    queryset = Academic.objects.select_related("department", "user").all()
     serializer_class = AcademicSerializer
     permission_classes = [IsAdminRole]
+
+    def perform_destroy(self, instance):
+        user = instance.user
+        instance.delete()
+        if user:
+            user.delete()
 
 
 class AcademicEligibleModulesView(ListAPIView):

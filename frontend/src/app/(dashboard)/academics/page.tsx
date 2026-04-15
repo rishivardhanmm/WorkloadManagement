@@ -34,9 +34,22 @@ export default function AcademicsPage() {
     capacity_hours: 1500,
     is_active: true,
   });
+  const [formError, setFormError] = useState<string | null>(null);
   const [eligibilities, setEligibilities] = useState<Eligibility[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
   const [eligibilityLoading, setEligibilityLoading] = useState(false);
+  const normalizedFullName = form.full_name.trim().toLowerCase();
+  const normalizedEmail = form.email.trim().toLowerCase();
+
+  const duplicateName = academics.some((a: Academic) => {
+    if (editing && a.id === editing.id) return false;
+    return a.full_name.trim().toLowerCase() === normalizedFullName;
+  });
+
+  const duplicateEmail = academics.some((a: Academic) => {
+    if (editing && a.id === editing.id) return false;
+    return a.email.trim().toLowerCase() === normalizedEmail;
+  });
 
   useEffect(() => {
     if (!token) return;
@@ -69,6 +82,7 @@ export default function AcademicsPage() {
   }, [token, deptFilter]);
 
   const openEdit = (a: Academic) => {
+   setFormError(null);
     setEditing(a);
     setForm({
       full_name: a.full_name,
@@ -80,6 +94,7 @@ export default function AcademicsPage() {
   };
 
   const openCreate = () => {
+    setFormError(null);
     setCreating(true);
     setEditing(null);
     setForm({
@@ -93,6 +108,24 @@ export default function AcademicsPage() {
 
   const save = async () => {
     if (!token) return;
+
+    setFormError(null);
+
+    if (!form.full_name.trim()) {
+      setFormError("Username/full name is required.");
+      return;
+    }
+
+    if (duplicateName) {
+      setFormError("Username already exists. Try another one.");
+      return;
+    }
+
+    if (!editing && duplicateEmail) {
+      setFormError("Email already exists. Try another one.");
+      return;
+    }
+
     try {
       if (editing) {
         await api.academics.update(token, editing.id, form);
@@ -105,8 +138,11 @@ export default function AcademicsPage() {
         setAcademics((prev: Academic[]) => [...prev, created]);
         setCreating(false);
       }
+    
+
+      setFormError(null);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Failed to save");
+      setFormError(e instanceof Error ? e.message : "Failed to save");
     }
   };
 
@@ -156,9 +192,22 @@ export default function AcademicsPage() {
                 <Label>Full name</Label>
                 <Input
                   value={form.full_name}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => setForm((f: FormState) => ({ ...f, full_name: e.target.value }))}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setForm((f: FormState) => ({ ...f, full_name: value }));
+
+                    if (formError) {
+                      setFormError(null);
+                    }
+                  }}
                   placeholder="Full name"
                 />
+
+                {normalizedFullName && duplicateName && (
+                  <p className="mt-1 text-sm text-destructive">
+                    Username already exists. Try another one.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
@@ -194,6 +243,9 @@ export default function AcademicsPage() {
                 />
               </div>
             </div>
+            {formError && !duplicateName && (
+              <p className="text-sm text-destructive">{formError}</p>
+            )}
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"

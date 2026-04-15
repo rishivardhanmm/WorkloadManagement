@@ -24,19 +24,20 @@ class AcademicSerializer(serializers.ModelSerializer):
         extra_kwargs = {"user": {"read_only": True}}
 
     def create(self, validated_data):
-        full_name = validated_data["full_name"]
-        email = validated_data["email"]
+        full_name = validated_data["full_name"].strip()
+        email = validated_data["email"].strip()
 
-        # Create login for the academic:
-        # username = full name (with suffix if duplicate)
-        # password = final username + "123"
-        base_username = full_name.strip()
-        username = base_username
-        suffix = 1
+        username = full_name
 
-        while User.objects.filter(username=username).exists():
-            suffix += 1
-            username = f"{base_username} {suffix}"
+        if User.objects.filter(username=username).exists():
+            raise serializers.ValidationError(
+                {"full_name": "A user with this full name/username already exists. Please change the username/full name."}
+            )
+
+        if User.objects.filter(email=email).exists():
+            raise serializers.ValidationError(
+            {"email": "A user with this email already exists."}
+            )
 
         user = User.objects.create(
             username=username,
@@ -50,3 +51,4 @@ class AcademicSerializer(serializers.ModelSerializer):
 
         validated_data["user"] = user
         return super().create(validated_data)
+    
