@@ -11,30 +11,24 @@ export default function HomePage() {
 
   useEffect(() => {
     if (loading) return;
+
     if (user) {
+      if (user.must_verify_email) {
+        router.replace("/verify-email");
+        return;
+      }
+
       router.replace(user.role === "ADMIN" ? "/dashboard" : "/my-workload");
     }
   }, [user, loading, router]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-background via-background to-primary/[0.06]">
-        <div className="animate-pulse rounded-xl bg-primary/10 h-14 w-56" />
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      </div>
-    );
+    return <div className="p-8 text-sm text-muted-foreground">Loading…</div>;
   }
 
   if (user) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-background via-background to-primary/[0.06]">
-        <p className="text-muted-foreground">Redirecting…</p>
-      </div>
-    );
+    return <div className="p-8 text-sm text-muted-foreground">Redirecting…</div>;
   }
-  return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-background via-background to-primary/[0.06]">
-      <LoginForm />
-    </div>
-  );
+
+  return <LoginForm />;
 }

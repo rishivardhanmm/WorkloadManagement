@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/components/providers/AuthProvider";
@@ -21,7 +21,6 @@ import {
   ChevronDown,
   BookOpenCheck,
 } from "lucide-react";
-import { useState, useRef, useEffect as useEffectDom } from "react";
 import { cn } from "@/lib/cn";
 import { useYears } from "@/hooks/useYears";
 
@@ -39,29 +38,39 @@ const academicNav = [
   { href: "/group-summary", label: "Group Summary", icon: BarChart3 },
 ];
 
+const adminRoutes = ["/dashboard", "/academics", "/modules", "/years", "/allocations"];
+const academicRoutes = ["/my-workload", "/history", "/group-summary"];
+
+function matchesProtectedRoute(pathname: string, routes: string[]) {
+  return routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+}
+
 function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const router = useRouter();
   const pathname = usePathname();
   const [userOpen, setUserOpen] = useState(false);
-  const userRef = useRef<HTMLDivElement>(null);
+  const userRef = useRef<HTMLDivElement | null>(null);
+
   const { years } = useYears();
   const { yearId, setYearId } = useYearId();
 
-  useEffectDom(() => {
+  useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (userRef.current && !userRef.current.contains(e.target as Node))
+      if (userRef.current && !userRef.current.contains(e.target as Node)) {
         setUserOpen(false);
+      }
     }
+
     document.addEventListener("click", handleClick);
     return () => document.removeEventListener("click", handleClick);
   }, []);
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-muted-foreground">Loading…</p>
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Loading...
       </div>
     );
   }
@@ -69,133 +78,180 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const nav = user.role === "ADMIN" ? adminNav : academicNav;
 
   return (
-    <div className="min-h-screen flex bg-background">
-      <aside className="w-60 border-r border-border bg-card flex flex-col shadow-sm">
-        <div className="p-5 border-b border-border">
-          <Link
-            href={user.role === "ADMIN" ? "/dashboard" : "/my-workload"}
-            className="flex items-center gap-2 font-bold text-lg text-foreground hover:text-primary transition-colors"
-          >
-            <span className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground text-sm font-bold">W</span>
-            Workload
-          </Link>
-        </div>
-        <nav className="flex-1 p-3 space-y-0.5">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                pathname === item.href
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
-            >
-              <item.icon className="h-4 w-4 shrink-0" />
-              {item.label}
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b bg-card">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
+          <div className="flex items-center gap-6">
+            <Link href={user.role === "ADMIN" ? "/dashboard" : "/my-workload"} className="text-lg font-semibold">
+              W Workload
             </Link>
-          ))}
-        </nav>
-      </aside>
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b border-border flex items-center justify-between px-6 gap-4 bg-card">
-          {user.role === "ADMIN" && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Year:</span>
-              {years.length > 0 ? (
-                <select
-                  className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  value={yearId ?? ""}
-                  onChange={(e) => setYearId(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">All years</option>
-                  {years.map((y) => (
-                    <option key={y.id} value={y.id}>
-                      {y.label} {y.is_locked ? "🔒" : ""}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="text-sm text-muted-foreground">Loading…</span>
-              )}
-            </div>
-          )}
-          {user.role === "ACADEMIC" && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Year:</span>
-              {years.length > 0 ? (
-                <select
-                  className="rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  value={yearId ?? ""}
-                  onChange={(e) => setYearId(e.target.value ? Number(e.target.value) : null)}
-                >
-                  {years.map((y) => (
-                    <option key={y.id} value={y.id}>
-                      {y.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="text-sm text-muted-foreground">Loading…</span>
-              )}
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={toggle} aria-label="Toggle theme">
+
+            <nav className="hidden items-center gap-2 md:flex">
+              {nav.map((item) => {
+                const Icon = item.icon;
+                const active =
+                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {user.role === "ADMIN" && (
+              <div className="hidden items-center gap-2 md:flex">
+                <label className="text-sm text-muted-foreground">Year:</label>
+                {years.length > 0 ? (
+                  <select
+                    value={yearId ?? ""}
+                    onChange={(e) =>
+                      setYearId(e.target.value ? Number(e.target.value) : null)
+                    }
+                    className="rounded-md border bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="">All years</option>
+                    {years.map((y) => (
+                      <option key={y.id} value={y.id}>
+                        {y.label} {y.is_locked ? "(Locked)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Loading...</span>
+                )}
+              </div>
+            )}
+
+            {user.role === "ACADEMIC" && (
+              <div className="hidden items-center gap-2 md:flex">
+                <label className="text-sm text-muted-foreground">Year:</label>
+                {years.length > 0 ? (
+                  <select
+                    value={yearId ?? ""}
+                    onChange={(e) =>
+                      setYearId(e.target.value ? Number(e.target.value) : null)
+                    }
+                    className="rounded-md border bg-background px-3 py-2 text-sm"
+                  >
+                    {years.map((y) => (
+                      <option key={y.id} value={y.id}>
+                        {y.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Loading...</span>
+                )}
+              </div>
+            )}
+
+            <Button variant="outline" size="icon" onClick={toggle}>
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
+
             <div className="relative" ref={userRef}>
               <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1"
+                variant="outline"
+                className="flex items-center gap-2"
                 onClick={() => setUserOpen((o) => !o)}
               >
-                {user.username}
+                <span>{user.username}</span>
                 <ChevronDown className="h-4 w-4" />
               </Button>
+
               {userOpen && (
-                <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-card py-1 shadow-lg z-50">
-                  <div className="px-3 py-2 text-sm text-muted-foreground border-b border-border">
-                    {user.email}
+                <div className="absolute right-0 z-50 mt-2 w-64 rounded-md border bg-popover p-3 shadow-lg">
+                  <div className="mb-3">
+                    <p className="font-medium">{user.username}</p>
+                    <p className="text-sm text-muted-foreground">{user.email}</p>
                   </div>
-                  <button
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent"
+
+                  <Button
+                    variant="destructive"
+                    className="w-full"
                     onClick={() => {
                       logout();
                       setUserOpen(false);
                       router.push("/");
                     }}
                   >
-                    <LogOut className="h-4 w-4" />
+                    <LogOut className="mr-2 h-4 w-4" />
                     Log out
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
           </div>
-        </header>
-        <main className="flex-1 p-6 overflow-auto">{children}</main>
-      </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
     </div>
   );
 }
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, token, loading } = useAuth();
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const { years, currentYearId, setCurrentYearId } = useYears();
+  const [isAuthorisedRoute, setIsAuthorisedRoute] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/");
-  }, [loading, user, router]);
+    if (loading) return;
 
-  if (!user) {
+    if (!user) {
+      setIsAuthorisedRoute(false);
+      router.replace("/");
+      return;
+    }
+    if (user.must_verify_email) {
+    setIsAuthorisedRoute(false);
+    router.replace("/verify-email");
+    return;
+    }
+    
+
+    const isAdminPage = matchesProtectedRoute(pathname, adminRoutes);
+    const isAcademicPage = matchesProtectedRoute(pathname, academicRoutes);
+
+    if (user.role === "ADMIN" && isAcademicPage) {
+      setIsAuthorisedRoute(false);
+      router.replace("/dashboard");
+      return;
+    }
+
+    if (user.role === "ACADEMIC" && isAdminPage) {
+      setIsAuthorisedRoute(false);
+      router.replace("/my-workload");
+      return;
+    }
+
+    setIsAuthorisedRoute(true);
+  }, [loading, user, pathname, router]);
+
+  if (loading || !user || !isAuthorisedRoute) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-background">
-        <div className="animate-pulse rounded-lg bg-muted h-12 w-48" />
-        <p className="text-sm text-muted-foreground">Loading…</p>
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Loading...
       </div>
     );
   }

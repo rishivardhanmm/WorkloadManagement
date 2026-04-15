@@ -3,7 +3,14 @@
 import * as React from "react";
 import { api } from "@/lib/api";
 
-type User = { id: number; username: string; email: string; role: string };
+type User = {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  is_email_verified: boolean;
+  must_verify_email: boolean;
+};
 
 type AuthState = {
   user: User | null;
