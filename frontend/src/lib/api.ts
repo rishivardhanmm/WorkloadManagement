@@ -126,6 +126,50 @@ export const api = {
     delete: (token: string, id: number) =>
       request(`/api/allocations/${id}`, { method: "DELETE", token }),
   },
+    moduleTeachingAllocations: {
+    list: (
+      token: string,
+      params?: {
+        module?: number;
+        academic?: number;
+        academic_year?: number;
+        department?: number;
+      }
+    ) => {
+      const search = new URLSearchParams();
+
+      if (params?.module) search.set("module", String(params.module));
+      if (params?.academic) search.set("academic", String(params.academic));
+      if (params?.academic_year) search.set("academic_year", String(params.academic_year));
+      if (params?.department) search.set("department", String(params.department));
+
+      const query = search.toString();
+      return request<ModuleTeachingAllocation[]>(
+        `/api/module-teaching-allocations${query ? `?${query}` : ""}`,
+        { token }
+      );
+    },
+
+    create: (token: string, payload: ModuleTeachingAllocationPayload) =>
+      request<ModuleTeachingAllocation>("/api/module-teaching-allocations", {
+        method: "POST",
+        token,
+        body: payload,
+      }),
+
+    update: (token: string, id: number, payload: Partial<ModuleTeachingAllocationPayload>) =>
+      request<ModuleTeachingAllocation>(`/api/module-teaching-allocations/${id}`, {
+        method: "PATCH",
+        token,
+        body: payload,
+      }),
+
+    remove: (token: string, id: number) =>
+      request<void>(`/api/module-teaching-allocations/${id}`, {
+        method: "DELETE",
+        token,
+      }),
+  },
   analytics: {
     adminSummary: (token: string, year: number) =>
       request<AdminSummary>("/api/analytics/admin/summary?year=" + year, { token }),
@@ -204,6 +248,23 @@ export interface Module {
   department: number;
   credit_hours: number;
   is_active: boolean;
+}
+export interface ModuleTeachingAllocation {
+  id: number;
+  module: number;
+  module_detail?: Module;
+  academic: number;
+  academic_detail?: Academic;
+  academic_year: number;
+  academic_year_detail?: AcademicYear;
+  percentage: number;
+}
+
+export interface ModuleTeachingAllocationPayload {
+  module: number;
+  academic: number;
+  academic_year: number;
+  percentage: number;
 }
 
 export interface WorkloadAllocation {

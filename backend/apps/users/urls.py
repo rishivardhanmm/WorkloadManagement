@@ -1,9 +1,12 @@
 from django.urls import path
 from .views import (
+    ChangePasswordView,
     CustomTokenObtainPairView,
     CustomTokenRefreshView,
-    ForgotPasswordConfirmView,
     ForgotPasswordRequestView,
+    ForgotPasswordResendView,
+    ForgotPasswordResetView,
+    ForgotPasswordVerifyView,
     MeView,
     SendVerificationCodeView,
     VerifyEmailView,
@@ -16,5 +19,8 @@ urlpatterns = [
     path("send-verification-code", SendVerificationCodeView.as_view(), name="send_verification_code"),
     path("verify-email", VerifyEmailView.as_view(), name="verify_email"),
     path("forgot-password/request", ForgotPasswordRequestView.as_view(), name="forgot_password_request"),
-    path("forgot-password/confirm", ForgotPasswordConfirmView.as_view(), name="forgot_password_confirm"),
+    path("forgot-password/resend", ForgotPasswordResendView.as_view(), name="forgot_password_resend"),
+    path("forgot-password/verify", ForgotPasswordVerifyView.as_view(), name="forgot_password_verify"),
+    path("forgot-password/reset", ForgotPasswordResetView.as_view(), name="forgot_password_reset"),
+    path("change-password", ChangePasswordView.as_view(), name="change_password"),
 ]

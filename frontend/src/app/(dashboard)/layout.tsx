@@ -36,7 +36,7 @@ const academicNav = [
   { href: "/my-workload", label: "My Workload", icon: BookOpen },
   { href: "/history", label: "History", icon: History },
   { href: "/group-summary", label: "Group Summary", icon: BarChart3 },
-  { href: "/forgot-password", label: "Reset Password", icon: BookOpenCheck },
+  { href: "/change-password", label: "Change Password", icon: BookOpenCheck },
 ];
 
 const adminRoutes = ["/dashboard", "/academics", "/modules", "/years", "/allocations"];

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function ForgotPasswordPage() {
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [username, setUsername] = useState("");
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -50,6 +50,69 @@ export default function ForgotPasswordPage() {
     }
   }
 
+  async function handleResendCode() {
+    setLoading(true);
+    setError("");
+    setInfo("");
+
+    try {
+      const res = await fetch(`${getApiBase()}/api/auth/forgot-password/resend`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: username.trim(),
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.detail || "Failed to resend reset code.");
+      }
+
+      setInfo("A new OTP has been sent if the account is eligible.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to resend reset code.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    setInfo("");
+
+    try {
+      const res = await fetch(`${getApiBase()}/api/auth/forgot-password/verify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: username.trim(),
+          code: code.trim(),
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.detail || "Failed to verify OTP.");
+      }
+
+      setInfo("OTP verified successfully. You can now set a new password.");
+      setStep(3);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to verify OTP.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleResetPassword(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -57,7 +120,7 @@ export default function ForgotPasswordPage() {
     setInfo("");
 
     try {
-      const res = await fetch(`${getApiBase()}/api/auth/forgot-password/confirm`, {
+      const res = await fetch(`${getApiBase()}/api/auth/forgot-password/reset`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -86,7 +149,6 @@ export default function ForgotPasswordPage() {
       }
 
       setInfo("Password reset successful. You can now sign in with your new password.");
-      setCode("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (e) {
@@ -116,7 +178,7 @@ export default function ForgotPasswordPage() {
             </div>
           ) : null}
 
-          {step === 1 ? (
+          {step === 1 && (
             <form onSubmit={handleSendCode} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
@@ -130,24 +192,22 @@ export default function ForgotPasswordPage() {
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Sending code..." : "Send OTP"}
+                {loading ? "Sending OTP..." : "Send OTP"}
               </Button>
             </form>
-          ) : (
-            <form onSubmit={handleResetPassword} className="space-y-4">
+          )}
+
+          {step === 2 && (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="username-readonly">Username</Label>
-                <Input
-                  id="username-readonly"
-                  value={username}
-                  readOnly
-                />
+                <Input id="username-readonly" value={username} readOnly />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="code">OTP</Label>
+                <Label htmlFor="otp">OTP</Label>
                 <Input
-                  id="code"
+                  id="otp"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="Enter the OTP sent to your email"
@@ -156,6 +216,25 @@ export default function ForgotPasswordPage() {
                 />
               </div>
 
+              <div className="flex gap-2">
+                <Button type="submit" className="flex-1" disabled={loading}>
+                  {loading ? "Verifying..." : "Verify OTP"}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleResendCode}
+                  disabled={loading}
+                >
+                  Resend OTP
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {step === 3 && (
+            <form onSubmit={handleResetPassword} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="new-password">New Password</Label>
                 <Input
@@ -163,7 +242,7 @@ export default function ForgotPasswordPage() {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Minimum 8 characters"
+                  placeholder="Enter new password"
                   required
                 />
               </div>
@@ -175,7 +254,7 @@ export default function ForgotPasswordPage() {
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter new password"
+                  placeholder="Confirm new password"
                   required
                 />
               </div>
