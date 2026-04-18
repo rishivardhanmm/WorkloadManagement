@@ -1,12 +1,17 @@
 from django.db.models import Q
 from rest_framework import status
-from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from rest_framework.generics import ListAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.response import Response
 
 from apps.users.permissions import IsAdminRole
 
-from .models import WorkloadAllocation
-from .serializers import WorkloadAllocationSerializer, WorkloadAllocationWriteSerializer
+from .models import WorkloadAllocation, ResearchRole, AdminRole
+from .serializers import (
+    WorkloadAllocationSerializer,
+    WorkloadAllocationWriteSerializer,
+    ResearchRoleSerializer,
+    AdminRoleSerializer,
+)
 
 
 class WorkloadAllocationListCreateView(ListCreateAPIView):
@@ -22,6 +27,12 @@ class WorkloadAllocationListCreateView(ListCreateAPIView):
             "teaching_items",
             "teaching_items__module",
             "teaching_items__module__department",
+            "research_items",
+            "research_items__research_role",
+            "research_items__research_role__department",
+            "admin_items",
+            "admin_items__admin_role",
+            "admin_items__admin_role__department",
         )
 
         department = self.request.query_params.get("department")
@@ -38,9 +49,7 @@ class WorkloadAllocationListCreateView(ListCreateAPIView):
 
         search = (self.request.query_params.get("search") or "").strip()
         if search:
-            qs = qs.filter(
-                Q(academic__full_name__icontains=search)
-            )
+            qs = qs.filter(Q(academic__full_name__icontains=search))
 
         return qs.order_by("-updated_at", "academic__full_name")
 
@@ -58,7 +67,10 @@ class WorkloadAllocationListCreateView(ListCreateAPIView):
         self.perform_create(write_serializer)
 
         instance = write_serializer.instance
-        read_serializer = WorkloadAllocationSerializer(instance, context=self.get_serializer_context())
+        read_serializer = WorkloadAllocationSerializer(
+            instance,
+            context=self.get_serializer_context(),
+        )
 
         headers = self.get_success_headers(read_serializer.data)
         return Response(read_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
@@ -75,6 +87,12 @@ class WorkloadAllocationDetailView(RetrieveUpdateDestroyAPIView):
         "teaching_items",
         "teaching_items__module",
         "teaching_items__module__department",
+        "research_items",
+        "research_items__research_role",
+        "research_items__research_role__department",
+        "admin_items",
+        "admin_items__admin_role",
+        "admin_items__admin_role__department",
     )
 
     def get_serializer_class(self):
@@ -90,5 +108,36 @@ class WorkloadAllocationDetailView(RetrieveUpdateDestroyAPIView):
         write_serializer.is_valid(raise_exception=True)
         self.perform_update(write_serializer)
 
-        read_serializer = WorkloadAllocationSerializer(write_serializer.instance, context=self.get_serializer_context())
+        read_serializer = WorkloadAllocationSerializer(
+            write_serializer.instance,
+            context=self.get_serializer_context(),
+        )
         return Response(read_serializer.data, status=status.HTTP_200_OK)
+
+
+class ResearchRoleListView(ListAPIView):
+    permission_classes = [IsAdminRole]
+    serializer_class = ResearchRoleSerializer
+
+    def get_queryset(self):
+        qs = ResearchRole.objects.select_related("department").filter(is_active=True)
+
+        department = self.request.query_params.get("department")
+        if department:
+            qs = qs.filter(department_id=department)
+
+        return qs.order_by("name")
+
+
+class AdminRoleListView(ListAPIView):
+    permission_classes = [IsAdminRole]
+    serializer_class = AdminRoleSerializer
+
+    def get_queryset(self):
+        qs = AdminRole.objects.select_related("department").filter(is_active=True)
+
+        department = self.request.query_params.get("department")
+        if department:
+            qs = qs.filter(department_id=department)
+
+        return qs.order_by("name")

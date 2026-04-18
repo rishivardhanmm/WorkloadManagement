@@ -9,7 +9,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Save, X } from "lucide-react";
-import { api, type WorkloadAllocation, type Academic, type Department, type AcademicYear, type Module, type Eligibility } from "@/lib/api";
+import {
+  api,
+  type WorkloadAllocation,
+  type Academic,
+  type Department,
+  type AcademicYear,
+  type Module,
+  type Eligibility,
+} from "@/lib/api";
 
 export default function AllocationsPage() {
   const { token } = useAuth();
@@ -31,10 +39,28 @@ export default function AllocationsPage() {
     { module: number; percentage: number }[]
   >([{ module: 0, percentage: 100 }]);
   const [eligibilities, setEligibilities] = useState<Eligibility[]>([]);
+  const [researchRoles, setResearchRoles] = useState<any[]>([]);
+  const [adminRoles, setAdminRoles] = useState<any[]>([]);
+
+  const [researchItems, setResearchItems] = useState<
+    { research_role: number; percentage: number }[]
+  >([{ research_role: 0, percentage: 100 }]);
+
+  const [adminItems, setAdminItems] = useState<
+    { admin_role: number; percentage: number }[]
+  >([{ admin_role: 0, percentage: 100 }]);
 
   const [modules, setModules] = useState<Module[]>([]);
   const [eligibleModules, setEligibleModules] = useState<Module[]>([]);
-  
+  const selectedAcademic = academics.find((a) => a.id === createForm.academic);
+  const eligibleResearchRoles = selectedAcademic
+    ? researchRoles.filter((r) => r.department === selectedAcademic.department)
+    : [];
+
+  const eligibleAdminRoles = selectedAcademic
+    ? adminRoles.filter((r) => r.department === selectedAcademic.department)
+    : [];
+    
 
   const calculatedTeachingHours = teachingItems.reduce((sum, item) => {
     const module = modules.find((m) => m.id === item.module);
@@ -43,10 +69,25 @@ export default function AllocationsPage() {
     const hours = Number(module.credit_hours || 0) * ((Number(item.percentage) || 0) / 100);
     return sum + hours;
   }, 0);
+  const calculatedResearchHours = researchItems.reduce((sum, item) => {
+  const role = eligibleResearchRoles.find((r) => r.id === item.research_role);
+  if (!role) return sum;
+
+  const hours = Number(role.expected_hours || 0) * ((Number(item.percentage) || 0) / 100);
+  return sum + hours;
+}, 0);
+
+const calculatedAdminHours = adminItems.reduce((sum, item) => {
+  const role = eligibleAdminRoles.find((r) => r.id === item.admin_role);
+  if (!role) return sum;
+
+  const hours = Number(role.expected_hours || 0) * ((Number(item.percentage) || 0) / 100);
+  return sum + hours;
+}, 0);
 
   const selectedYear = years.find((y) => y.id === yearId);
   const isLocked = selectedYear?.is_locked ?? false;
-  const selectedAcademic = academics.find((a) => a.id === createForm.academic);
+  
 
   useEffect(() => {
     if (!token) return;
@@ -56,6 +97,8 @@ export default function AllocationsPage() {
     api.eligibility.list(token).then((r) => setEligibilities(r.results || []));
     api.years.list(token).then((r) => setYears(r.results || []));
     api.modules.list(token).then((r) => setModules(r.results || []));
+    api.researchRoles.list(token).then((r) => setResearchRoles(r.results || []));
+    api.adminRoles.list(token).then((r) => setAdminRoles(r.results || []));
   }, [token]);
 
   useEffect(() => {
@@ -103,6 +146,8 @@ export default function AllocationsPage() {
 
   useEffect(() => {
     setTeachingItems([{ module: 0, percentage: 100 }]);
+    setResearchItems([{ research_role: 0, percentage: 100 }]);
+    setAdminItems([{ admin_role: 0, percentage: 100 }]);
   }, [createForm.academic]);
 
   const startEdit = (a: WorkloadAllocation) => {
@@ -122,6 +167,20 @@ export default function AllocationsPage() {
       teaching_hours: Number(calculatedTeachingHours.toFixed(2)),
     }));
   }, [calculatedTeachingHours]);
+
+  useEffect(() => {
+    setCreateForm((prev) => ({
+      ...prev,
+      research_hours: Number(calculatedResearchHours.toFixed(2)),
+    }));
+  }, [calculatedResearchHours]);
+
+  useEffect(() => {
+    setCreateForm((prev) => ({
+      ...prev,
+      admin_hours: Number(calculatedAdminHours.toFixed(2)),
+    }));
+  }, [calculatedAdminHours]);
 
   const saveEdit = async () => {
     if (!token || editingId == null) return;
@@ -161,6 +220,8 @@ export default function AllocationsPage() {
     });
     setTeachingItems([{ module: 0, percentage: 100 }]);
     setEligibleModules([]);
+    setResearchItems([{ research_role: 0, percentage: 100 }]);
+    setAdminItems([{ admin_role: 0, percentage: 100 }]);
   };
 
   const refreshAllocations = async () => {
@@ -198,6 +259,19 @@ export default function AllocationsPage() {
           .filter((item) => item.module)
           .map((item) => ({
             module: item.module,
+            percentage: item.percentage,
+          })),
+        research_items: researchItems
+          .filter((item) => item.research_role)
+          .map((item) => ({
+            research_role: item.research_role,
+            percentage: item.percentage,
+          })),
+
+        admin_items: adminItems
+          .filter((item) => item.admin_role)
+          .map((item) => ({
+            admin_role: item.admin_role,
             percentage: item.percentage,
           })),
       });
@@ -382,23 +456,151 @@ export default function AllocationsPage() {
                   </p>
                 )}
               </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Research</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={createForm.research_hours || ""}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, research_hours: Number(e.target.value) || 0 }))}
-                />
+              <div className="space-y-3">
+                <label>Research Allocation</label>
+
+                {researchItems.map((row, index) => (
+                  <div key={index} className="flex gap-2 items-center">
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                      value={row.research_role}
+                      onChange={(e) => {
+                        const updated = [...researchItems];
+                        updated[index].research_role = Number(e.target.value);
+                        setResearchItems(updated);
+                      }}
+                    >
+                      <option value={0}>Select Research Role</option>
+                      {eligibleResearchRoles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={row.percentage}
+                      onChange={(e) => {
+                        const updated = [...researchItems];
+                        updated[index].percentage = Number(e.target.value) || 0;
+                        setResearchItems(updated);
+                      }}
+                      className="w-28"
+                    />
+
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => {
+                        if (researchItems.length === 1) {
+                          setResearchItems([{ research_role: 0, percentage: 100 }]);
+                          return;
+                        }
+                        setResearchItems((prev) => prev.filter((_, i) => i !== index));
+                      }}
+                    >
+                      X
+                    </Button>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setResearchItems((prev) => [...prev, { research_role: 0, percentage: 100 }])
+                  }
+                >
+                  + Add Research Role
+                </Button>
+
+                {!createForm.academic && (
+                  <p className="text-sm text-muted-foreground">
+                    Select an academic first to see department research roles.
+                  </p>
+                )}
+
+                {createForm.academic && eligibleResearchRoles.length === 0 && (
+                  <p className="text-sm text-destructive">
+                    No active research roles found for the selected academic’s department.
+                  </p>
+                )}
               </div>
-              <div>
-                <label className="text-sm font-medium mb-1 block">Admin</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={createForm.admin_hours || ""}
-                  onChange={(e) => setCreateForm((f) => ({ ...f, admin_hours: Number(e.target.value) || 0 }))}
-                />
+              <div className="space-y-3">
+                <label>Admin Allocation</label>
+
+                {adminItems.map((row, index) => (
+                  <div key={index} className="flex gap-2 items-center">
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                      value={row.admin_role}
+                      onChange={(e) => {
+                        const updated = [...adminItems];
+                        updated[index].admin_role = Number(e.target.value);
+                        setAdminItems(updated);
+                      }}
+                    >
+                      <option value={0}>Select Admin Role</option>
+                      {eligibleAdminRoles.map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={row.percentage}
+                      onChange={(e) => {
+                        const updated = [...adminItems];
+                        updated[index].percentage = Number(e.target.value) || 0;
+                        setAdminItems(updated);
+                      }}
+                      className="w-28"
+                    />
+
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => {
+                        if (adminItems.length === 1) {
+                          setAdminItems([{ admin_role: 0, percentage: 100 }]);
+                          return;
+                        }
+                        setAdminItems((prev) => prev.filter((_, i) => i !== index));
+                      }}
+                    >
+                      X
+                    </Button>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setAdminItems((prev) => [...prev, { admin_role: 0, percentage: 100 }])
+                  }
+                >
+                  + Add Admin Role
+                </Button>
+
+                {!createForm.academic && (
+                  <p className="text-sm text-muted-foreground">
+                    Select an academic first to see department admin roles.
+                  </p>
+                )}
+
+                {createForm.academic && eligibleAdminRoles.length === 0 && (
+                  <p className="text-sm text-destructive">
+                    No active admin roles found for the selected academic’s department.
+                  </p>
+                )}
               </div>
             </div>
             <div className="flex gap-2">

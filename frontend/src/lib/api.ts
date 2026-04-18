@@ -1,3 +1,5 @@
+const API_BASE_URL = "http://127.0.0.1:8000/api";
+
 export function getApiBase(): string {
   if (typeof process.env.NEXT_PUBLIC_API_URL !== "undefined" && process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
@@ -139,6 +141,49 @@ export const api = {
       request<Module>(`/api/modules/${id}`, { method: "PATCH", body: data, token }),
     delete: (token: string, id: number) =>
       request(`/api/modules/${id}`, { method: "DELETE", token }),
+  },
+  researchRoles: {
+    list: (token: string, params?: { department?: number }) => {
+      const query = new URLSearchParams();
+
+      if (params?.department) {
+        query.append("department", String(params.department));
+      }
+
+      return fetch(
+        `${API_BASE_URL}/research-roles/${query.toString() ? `?${query}` : ""}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      ).then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch research roles");
+        return res.json();
+      });
+    },
+  },
+
+  adminRoles: {
+    list: (token: string, params?: { department?: number }) => {
+      const query = new URLSearchParams();
+
+      if (params?.department) {
+        query.append("department", String(params.department));
+      }
+
+      return fetch(
+        `${API_BASE_URL}/admin-roles/${query.toString() ? `?${query}` : ""}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      ).then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch admin roles");
+        return res.json();
+      });
+    },
   },
   allocations: {
     list: (
@@ -366,6 +411,16 @@ export type AllocationTeachingItemWrite = {
   percentage: number;
 };
 
+export type AllocationResearchItemWrite = {
+  research_role: number;
+  percentage: number;
+};
+
+export type AllocationAdminItemWrite = {
+  admin_role: number;
+  percentage: number;
+};
+
 export type AllocationWrite = {
   academic: number;
   academic_year: number;
@@ -374,6 +429,8 @@ export type AllocationWrite = {
   admin_hours: number;
   notes: string;
   teaching_items?: AllocationTeachingItemWrite[];
+  research_items?: AllocationResearchItemWrite[];
+  admin_items?: AllocationAdminItemWrite[];
 };
 
 export interface AdminSummary {

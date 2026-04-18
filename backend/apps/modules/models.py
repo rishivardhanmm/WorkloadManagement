@@ -7,7 +7,7 @@ from apps.academics.models import Academic
 
 
 class Module(models.Model):
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=20, unique=True, null=True, blank=True)
     name = models.CharField(max_length=255)
     department = models.ForeignKey(
         Department,

@@ -71,3 +71,87 @@ class TeachingAllocationItem(models.Model):
 
     def __str__(self):
         return f"{self.workload_allocation} - {self.module} ({self.percentage}%)"
+
+
+class ResearchRole(models.Model):
+    name = models.CharField(max_length=255)
+    department = models.ForeignKey(
+        "departments.Department",
+        on_delete=models.CASCADE,
+        related_name="research_roles",
+    )
+    expected_hours = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "allocations_researchrole"
+        ordering = ["name"]
+        unique_together = [["department", "name"]]
+
+    def __str__(self):
+        return self.name
+
+
+class ResearchAllocationItem(models.Model):
+    workload_allocation = models.ForeignKey(
+        WorkloadAllocation,
+        on_delete=models.CASCADE,
+        related_name="research_items",
+    )
+    research_role = models.ForeignKey(
+        ResearchRole,
+        on_delete=models.CASCADE,
+        related_name="allocation_items",
+    )
+    percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("100"))
+    calculated_hours = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+
+    class Meta:
+        db_table = "allocations_researchallocationitem"
+        ordering = ["research_role__name"]
+        unique_together = [["workload_allocation", "research_role"]]
+
+    def __str__(self):
+        return f"{self.workload_allocation} - {self.research_role} ({self.percentage}%)"
+
+
+class AdminRole(models.Model):
+    name = models.CharField(max_length=255)
+    department = models.ForeignKey(
+        "departments.Department",
+        on_delete=models.CASCADE,
+        related_name="admin_roles",
+    )
+    expected_hours = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "allocations_adminrole"
+        ordering = ["name"]
+        unique_together = [["department", "name"]]
+
+    def __str__(self):
+        return self.name
+
+
+class AdminAllocationItem(models.Model):
+    workload_allocation = models.ForeignKey(
+        WorkloadAllocation,
+        on_delete=models.CASCADE,
+        related_name="admin_items",
+    )
+    admin_role = models.ForeignKey(
+        AdminRole,
+        on_delete=models.CASCADE,
+        related_name="allocation_items",
+    )
+    percentage = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("100"))
+    calculated_hours = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+
+    class Meta:
+        db_table = "allocations_adminallocationitem"
+        ordering = ["admin_role__name"]
+        unique_together = [["workload_allocation", "admin_role"]]
+
+    def __str__(self):
+        return f"{self.workload_allocation} - {self.admin_role} ({self.percentage}%)"
