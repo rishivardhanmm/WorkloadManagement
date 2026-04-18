@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { useYearId } from "@/components/providers/YearProvider";
-import { Academic, AcademicYear, api, type Module as ModuleType } from "@/lib/api";
+import { api, type Module as ModuleType } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +19,6 @@ const ORDERING_OPTIONS = [
 
 export default function ModulesPage() {
   const { token } = useAuth();
-  const yearId = useYearId().yearId;
   const [modules, setModules] = useState<ModuleType[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -30,23 +28,14 @@ export default function ModulesPage() {
   const [viewModule, setViewModule] = useState<ModuleType | null>(null);
   const [form, setForm] = useState({ code: "", name: "", department: 0, credit_hours: 15, is_active: true });
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
-  const [allocations, setAllocations] = useState<
-    { academic: number; percentage: number }[]
-  >([{ academic: 0, percentage: 100 }]);
-  const [selectedYearId, setSelectedYearId] = useState<number>(0);
-  const [years, setYears] = useState<AcademicYear[]>([]);
-  const [academics, setAcademics] = useState<Academic[]>([]);
   
+ 
 
   const load = () => {
     if (!token) return;
     setLoading(true);
 
-    api.modules.list(token, {
-      search: search || undefined,
-      ordering,
-      academic_year: yearId || undefined,
-    }).then(
+    api.modules.list(token, { search: search || undefined, ordering }).then(
       (r) => {
         setModules(r.results || []);
         setLoading(false);
@@ -64,34 +53,9 @@ export default function ModulesPage() {
     if (!token) return;
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
-  }, [token, search, ordering, yearId]);
+  }, [token, search, ordering]);
 
-  useEffect(() => {
-    if (!token) return;
-
-    const loadExtraData = async () => {
-      try {
-        const [academicRes, yearRes] = await Promise.all([
-          api.academics.list(token),
-          api.years.list(token),
-        ]);
-
-        setAcademics(academicRes.results || academicRes);
-        setYears(yearRes.results || yearRes);
-
-        // auto select first year if not selected
-        if ((yearRes.results || yearRes).length > 0 && !selectedYearId) {
-          const firstYear = (yearRes.results || yearRes)[0];
-          setSelectedYearId(firstYear.id);
-        }
-
-      } catch (err) {
-        console.error("Failed to load academics/years", err);
-      }
-    };
-
-    loadExtraData();
-  }, [token]);
+  
 
   const openEdit = (m: ModuleType) => {
     setEditing(m);
@@ -115,38 +79,10 @@ export default function ModulesPage() {
       is_active: true,
     });
   };
-  const totalAllocationPercentage = allocations.reduce(
-    (sum, row) => sum + (Number(row.percentage) || 0),
-    0
-  );
-
-  const hasDuplicateAcademic = allocations.some((row, index) => {
-    if (!row.academic) return false;
-    return allocations.findIndex((x) => x.academic === row.academic) !== index;
-  });
-
-  const hasEmptyAcademic = allocations.some((row) => !row.academic);
-
-  const allocationError =
-    hasDuplicateAcademic
-      ? "The same academic cannot be added more than once."
-      : hasEmptyAcademic
-        ? "Please select an academic for every allocation row."
-        : totalAllocationPercentage !== 100
-          ? `Total allocation must be exactly 100%. Current total: ${totalAllocationPercentage}%.`
-          : null;
+  
 
   const save = async () => {
     if (!token) return;
-    if (!selectedYearId) {
-      alert("Please select an academic year.");
-      return;
-    }
-
-    if (allocationError) {
-      alert(allocationError);
-      return;
-    }
 
     try {
       const payload = { ...form, code: form.code || undefined };
@@ -163,34 +99,13 @@ export default function ModulesPage() {
         );
 
         setEditing(null);
-
       } else if (creating) {
-
-        // ✅ STEP 1: create module
         const created = await api.modules.create(token, payload);
-
         setModules((prev) => [...prev, created]);
-
-        // ✅ STEP 2: create allocations
-        for (const row of allocations) {
-          if (!row.academic) continue;
-
-          await api.moduleTeachingAllocations.create(token, {
-            module: created.id,
-            academic: row.academic,
-            academic_year: selectedYearId, // MUST EXIST
-            percentage: row.percentage,
-          });
-        }
-
-        // ✅ reset UI
-        setAllocations([{ academic: 0, percentage: 100 }]);
-
         setCreating(false);
       }
 
       load();
-
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to save");
     }
@@ -290,99 +205,8 @@ export default function ModulesPage() {
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Academic Year</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                value={selectedYearId}
-                onChange={(e) => setSelectedYearId(Number(e.target.value))}
-              >
-                <option value={0}>Select Year</option>
-                {years.map((y) => (
-                  <option key={y.id} value={y.id}>
-                    {y.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-3">
-              <Label>Teaching Allocation</Label>
-
-              {allocations.map((row, index) => (
-                <div key={index} className="flex gap-2 items-center">
-                  <select
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
-                    value={row.academic}
-                    onChange={(e) => {
-                      const updated = [...allocations];
-                      updated[index].academic = Number(e.target.value);
-                      setAllocations(updated);
-                    }}
-                  >
-                    <option value={0}>Select Academic</option>
-                    {academics.map((a: Academic) => (
-                      <option key={a.id} value={a.id}>
-                        {a.full_name}
-                      </option>
-                    ))}
-                  </select>
-
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={row.percentage}
-                    onChange={(e) => {
-                      const updated = [...allocations];
-                      updated[index].percentage = Number(e.target.value) || 0;
-                      setAllocations(updated);
-                    }}
-                    className="w-28"
-                  />
-
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    onClick={() => {
-                      if (allocations.length === 1) {
-                        setAllocations([{ academic: 0, percentage: 100 }]);
-                        return;
-                      }
-                      setAllocations((prev) => prev.filter((_, i) => i !== index));
-                    }}
-                  >
-                    X
-                  </Button>
-                </div>
-              ))}
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  setAllocations((prev) => [...prev, { academic: 0, percentage: 100 }])
-                }
-              >
-                + Add Academic
-              </Button>
-
-              <div className="text-sm">
-                <span className="font-medium">Current total:</span>{" "}
-                <span
-                  className={
-                    totalAllocationPercentage === 100
-                      ? "text-emerald-600"
-                      : "text-destructive"
-                  }
-                >
-                  {totalAllocationPercentage}%
-                </span>
-              </div>
-
-              {allocationError && (
-                <p className="text-sm text-destructive">{allocationError}</p>
-              )}
-            </div>
+            
+            
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -400,7 +224,6 @@ export default function ModulesPage() {
                 onClick={() => {
                   setEditing(null);
                   setCreating(false);
-                  setAllocations([{ academic: 0, percentage: 100 }]);
                 }}
               >
                 Cancel
@@ -497,32 +320,54 @@ export default function ModulesPage() {
             </Button>
           </div>
 
-          <div className="mb-4 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-lg border p-3">
-              <div className="text-sm text-muted-foreground">Allocated</div>
-              <div className="mt-1 font-medium">
-                {viewModule.is_allocated ? "Yes" : "No"}
+          <div className="mb-4 space-y-4">
+
+            {/* Summary */}
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="rounded-lg border p-3">
+                <div className="text-sm text-muted-foreground">Allocated</div>
+                <div className="mt-1 font-medium">
+                  {viewModule.is_allocated ? "Yes" : "No"}
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3">
+                <div className="text-sm text-muted-foreground">Allocated %</div>
+                <div className="mt-1 font-medium">
+                  {viewModule.allocated_percentage ?? 0}%
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-3">
+                <div className="text-sm text-muted-foreground">Remaining %</div>
+                <div className="mt-1 font-medium">
+                  {100 - (viewModule.allocated_percentage ?? 0)}%
+                </div>
               </div>
             </div>
 
-            <div className="rounded-lg border p-3">
-              <div className="text-sm text-muted-foreground">Allocated %</div>
-              <div className="mt-1 font-medium">
-                {viewModule.allocated_percentage ?? 0}%
+            {/* Progress bar */}
+            <div>
+              <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                <span>Allocation usage</span>
+                <span>{viewModule.allocated_percentage ?? 0}%</span>
+              </div>
+
+              <div className="h-3 w-full rounded-full bg-muted">
+                <div
+                  className="h-3 rounded-full bg-emerald-500"
+                  style={{
+                    width: `${viewModule.allocated_percentage ?? 0}%`,
+                  }}
+                />
               </div>
             </div>
 
-            <div className="rounded-lg border p-3">
-              <div className="text-sm text-muted-foreground">Allocated hours</div>
-              <div className="mt-1 font-medium">
-                {viewModule.allocated_hours ?? 0}
-              </div>
-            </div>
           </div>
 
           <div className="space-y-3">
             <h3 className="font-medium">Allocation breakdown</h3>
-
+ 
             {viewModule.allocation_breakdown && viewModule.allocation_breakdown.length > 0 ? (
               <div className="space-y-2">
                 {viewModule.allocation_breakdown.map((item, idx) => (
