@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useYearId } from "@/components/providers/YearProvider";
 import { Academic, AcademicYear, api, type Module as ModuleType } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye} from "lucide-react";
+
 
 const ORDERING_OPTIONS = [
   { value: "name", label: "Name" },
@@ -18,12 +20,14 @@ const ORDERING_OPTIONS = [
 
 export default function ModulesPage() {
   const { token } = useAuth();
+  const yearId = useYearId().yearId;
   const [modules, setModules] = useState<ModuleType[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [ordering, setOrdering] = useState("name");
   const [editing, setEditing] = useState<ModuleType | null>(null);
   const [creating, setCreating] = useState(false);
+  const [viewModule, setViewModule] = useState<ModuleType | null>(null);
   const [form, setForm] = useState({ code: "", name: "", department: 0, credit_hours: 15, is_active: true });
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
   const [allocations, setAllocations] = useState<
@@ -32,11 +36,17 @@ export default function ModulesPage() {
   const [selectedYearId, setSelectedYearId] = useState<number>(0);
   const [years, setYears] = useState<AcademicYear[]>([]);
   const [academics, setAcademics] = useState<Academic[]>([]);
+  
 
   const load = () => {
     if (!token) return;
     setLoading(true);
-    api.modules.list(token, { search: search || undefined, ordering }).then(
+
+    api.modules.list(token, {
+      search: search || undefined,
+      ordering,
+      academic_year: yearId || undefined,
+    }).then(
       (r) => {
         setModules(r.results || []);
         setLoading(false);
@@ -54,7 +64,7 @@ export default function ModulesPage() {
     if (!token) return;
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
-  }, [token, search, ordering]);
+  }, [token, search, ordering, yearId]);
 
   useEffect(() => {
     if (!token) return;
@@ -412,30 +422,54 @@ export default function ModulesPage() {
             <div className="rounded-md border overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left p-3 font-medium">Code</th>
-                    <th className="text-left p-3 font-medium">Name</th>
-                    <th className="text-left p-3 font-medium">Department</th>
-                    <th className="text-right p-3 font-medium">Credits</th>
-                    <th className="text-left p-3 font-medium">Active</th>
-                    <th className="w-24 p-3" />
+                  <tr className="border-b text-left">
+                    <th className="p-3">Code</th>
+                    <th className="p-3">Name</th>
+                    <th className="p-3">Department</th>
+                    <th className="p-3">Credits</th>
+                    <th className="p-3">Active</th>
+                    <th className="p-3">Allocated</th>
+                    <th className="p-3">Allocated %</th>
+                    <th className="p-3">Actions</th>
                   </tr>
                 </thead>
+
                 <tbody>
                   {modules.map((m) => (
-                    <tr key={m.id} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="p-3 text-muted-foreground">{m.code ?? "—"}</td>
+                    <tr key={m.id} className="border-b">
+                      <td className="p-3">{m.code ?? "—"}</td>
                       <td className="p-3">{m.name}</td>
-                      <td className="p-3">{(m as { department_detail?: { name: string } }).department_detail?.name ?? m.department}</td>
-                      <td className="p-3 text-right">{m.credit_hours}</td>
+                      <td className="p-3">
+                        {m.department_detail?.name ?? m.department}
+                      </td>
+                      <td className="p-3">{m.credit_hours}</td>
                       <td className="p-3">{m.is_active ? "Yes" : "No"}</td>
-                      <td className="p-3 flex gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => openEdit(m)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => remove(m.id)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                      <td className="p-3">
+                        {m.is_allocated ? (
+                          <span className="inline-flex rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600">
+                            Allocated
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                            Not allocated
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {m.allocated_percentage != null ? `${m.allocated_percentage}%` : "0%"}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex gap-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => setViewModule(m)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" onClick={() => openEdit(m)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button type="button" variant="destructive" size="sm" onClick={() => remove(m.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -445,6 +479,83 @@ export default function ModulesPage() {
           )}
         </CardContent>
       </Card>
+      {viewModule && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="w-full max-w-2xl rounded-2xl border bg-background p-6 shadow-xl">
+          <div className="mb-4 flex items-start justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">
+                {viewModule.code ? `${viewModule.code} - ${viewModule.name}` : viewModule.name}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {viewModule.department_detail?.name ?? "Department"} • {viewModule.credit_hours} hours
+              </p>
+            </div>
+
+            <Button variant="outline" size="sm" onClick={() => setViewModule(null)}>
+              Close
+            </Button>
+          </div>
+
+          <div className="mb-4 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-lg border p-3">
+              <div className="text-sm text-muted-foreground">Allocated</div>
+              <div className="mt-1 font-medium">
+                {viewModule.is_allocated ? "Yes" : "No"}
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <div className="text-sm text-muted-foreground">Allocated %</div>
+              <div className="mt-1 font-medium">
+                {viewModule.allocated_percentage ?? 0}%
+              </div>
+            </div>
+
+            <div className="rounded-lg border p-3">
+              <div className="text-sm text-muted-foreground">Allocated hours</div>
+              <div className="mt-1 font-medium">
+                {viewModule.allocated_hours ?? 0}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h3 className="font-medium">Allocation breakdown</h3>
+
+            {viewModule.allocation_breakdown && viewModule.allocation_breakdown.length > 0 ? (
+              <div className="space-y-2">
+                {viewModule.allocation_breakdown.map((item, idx) => (
+                  <div
+                    key={`${item.academic_id}-${item.academic_year_id}-${idx}`}
+                    className="flex items-center justify-between rounded-lg border p-3"
+                  >
+                    <div>
+                      <div className="font-medium">{item.academic_name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {item.academic_department} • {item.academic_year_label}
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="font-medium">{item.percentage}%</div>
+                      <div className="text-sm text-muted-foreground">
+                        {item.calculated_hours} hrs
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No allocation found for this module in the selected year.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
     </div>
+    
   );
 }

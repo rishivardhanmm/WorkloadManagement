@@ -1,14 +1,31 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from apps.departments.serializers import DepartmentSerializer
 from apps.academics.serializers import AcademicSerializer
 from apps.years.serializers import AcademicYearSerializer
+from apps.allocations.models import TeachingAllocationItem
 
 from .models import Module, Eligibility, ModuleTeachingAllocation
 
 
+class ModuleAllocationSummaryItemSerializer(serializers.Serializer):
+    academic_id = serializers.IntegerField()
+    academic_name = serializers.CharField()
+    academic_department = serializers.CharField()
+    academic_year_id = serializers.IntegerField()
+    academic_year_label = serializers.CharField()
+    percentage = serializers.DecimalField(max_digits=5, decimal_places=2)
+    calculated_hours = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
 class ModuleSerializer(serializers.ModelSerializer):
     department_detail = DepartmentSerializer(source="department", read_only=True)
+    allocated_percentage = serializers.SerializerMethodField()
+    allocated_hours = serializers.SerializerMethodField()
+    is_allocated = serializers.SerializerMethodField()
+    allocation_breakdown = serializers.SerializerMethodField()
 
     class Meta:
         model = Module
@@ -20,9 +37,69 @@ class ModuleSerializer(serializers.ModelSerializer):
             "department_detail",
             "credit_hours",
             "is_active",
+            "allocated_percentage",
+            "allocated_hours",
+            "is_allocated",
+            "allocation_breakdown",
             "created_at",
             "updated_at",
         ]
+
+    def _get_teaching_items_qs(self, obj):
+        request = self.context.get("request")
+        academic_year = request.query_params.get("academic_year") if request else None
+
+        qs = TeachingAllocationItem.objects.select_related(
+            "workload_allocation",
+            "workload_allocation__academic",
+            "workload_allocation__academic__department",
+            "workload_allocation__academic_year",
+            "module",
+        ).filter(module=obj)
+
+        if academic_year:
+            qs = qs.filter(workload_allocation__academic_year_id=academic_year)
+
+        return qs
+
+    def get_allocated_percentage(self, obj):
+        qs = self._get_teaching_items_qs(obj)
+        total = Decimal("0")
+        for item in qs:
+            total += Decimal(str(item.percentage))
+        return float(total)
+
+    def get_allocated_hours(self, obj):
+        qs = self._get_teaching_items_qs(obj)
+        total = Decimal("0")
+        for item in qs:
+            total += Decimal(str(item.calculated_hours))
+        return float(total)
+
+    def get_is_allocated(self, obj):
+        qs = self._get_teaching_items_qs(obj)
+        return qs.exists()
+
+    def get_allocation_breakdown(self, obj):
+        qs = self._get_teaching_items_qs(obj)
+
+        data = []
+        for item in qs:
+            academic = item.workload_allocation.academic
+            academic_year = item.workload_allocation.academic_year
+            data.append(
+                {
+                    "academic_id": academic.id,
+                    "academic_name": academic.full_name,
+                    "academic_department": academic.department.name,
+                    "academic_year_id": academic_year.id,
+                    "academic_year_label": getattr(academic_year, "label", str(academic_year)),
+                    "percentage": item.percentage,
+                    "calculated_hours": item.calculated_hours,
+                }
+            )
+
+        return ModuleAllocationSummaryItemSerializer(data, many=True).data
 
 
 class EligibilitySerializer(serializers.ModelSerializer):
@@ -80,7 +157,7 @@ class ModuleTeachingAllocationSerializer(serializers.ModelSerializer):
 
         if academic and not academic.is_active:
             raise serializers.ValidationError(
-                {"academic": "Academic must be active to receive module allocation."}
+                {"academic": "Academic must be active to receive teaching allocations."}
             )
 
         if module and not module.is_active:

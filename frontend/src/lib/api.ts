@@ -116,12 +116,22 @@ export const api = {
       }),
   },
   modules: {
-    list: (token: string, params?: { search?: string; ordering?: string }) => {
-      const q = new URLSearchParams();
-      if (params?.search) q.set("search", params.search);
-      if (params?.ordering) q.set("ordering", params.ordering);
-      const query = q.toString();
-      return request<{ results: Module[] }>(`/api/modules${query ? `?${query}` : ""}`, { token });
+    list: (
+      token: string,
+      params?: { search?: string; ordering?: string; academic_year?: number }
+    ) => {
+      const searchParams = new URLSearchParams();
+
+      if (params?.search) searchParams.set("search", params.search);
+      if (params?.ordering) searchParams.set("ordering", params.ordering);
+      if (params?.academic_year) searchParams.set("academic_year", String(params.academic_year));
+
+      const query = searchParams.toString();
+
+      return request<{ results: Module[] }>(
+        `/api/modules${query ? `?${query}` : ""}`,
+        { token }
+      );
     },
     create: (token: string, data: Partial<Module>) =>
       request<Module>("/api/modules", { method: "POST", body: data, token }),
@@ -295,8 +305,24 @@ export interface Module {
   code: string | null;
   name: string;
   department: number;
+  department_detail?: {
+    id: number;
+    name: string;
+  };
   credit_hours: number;
   is_active: boolean;
+  allocated_percentage?: number;
+  allocated_hours?: number;
+  is_allocated?: boolean;
+  allocation_breakdown?: {
+    academic_id: number;
+    academic_name: string;
+    academic_department: string;
+    academic_year_id: number;
+    academic_year_label: string;
+    percentage: number;
+    calculated_hours: number;
+  }[];
 }
 export interface ModuleTeachingAllocation {
   id: number;

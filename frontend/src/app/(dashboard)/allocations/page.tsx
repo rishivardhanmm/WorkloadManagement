@@ -159,7 +159,6 @@ export default function AllocationsPage() {
       admin_hours: 0,
       notes: "",
     });
-
     setTeachingItems([{ module: 0, percentage: 100 }]);
     setEligibleModules([]);
   };

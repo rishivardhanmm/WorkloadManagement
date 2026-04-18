@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from rest_framework import serializers
+from django.db.models import Sum
 
 from apps.academics.serializers import AcademicSerializer
 from apps.modules.models import Module
@@ -153,18 +154,15 @@ class WorkloadAllocationWriteSerializer(serializers.ModelSerializer):
                 )
 
         if teaching_items is not None:
-            total_percentage = sum(Decimal(str(item["percentage"])) for item in teaching_items)
-            if total_percentage != Decimal("100"):
-                raise serializers.ValidationError(
-                    {"teaching_items": f"Total teaching allocation must be exactly 100%. Current total: {total_percentage}%"}
-                )
-
             seen_modules = set()
+
             for item in teaching_items:
                 module_id = item["module"]
+                percentage = Decimal(str(item["percentage"]))
+
                 if module_id in seen_modules:
                     raise serializers.ValidationError(
-                        {"teaching_items": "The same module cannot be added more than once."}
+                        {"teaching_items": "The same module cannot be added more than once in one allocation."}
                     )
                 seen_modules.add(module_id)
 
@@ -178,6 +176,32 @@ class WorkloadAllocationWriteSerializer(serializers.ModelSerializer):
                 if academic and module.department_id != academic.department_id:
                     raise serializers.ValidationError(
                         {"teaching_items": "Module and academic must belong to the same department."}
+                    )
+
+                # REAL RULE:
+                # total allocation for this module in this academic year across ALL academics
+                # must not exceed 100%
+                existing_items = TeachingAllocationItem.objects.filter(
+                    module_id=module_id,
+                    workload_allocation__academic_year=academic_year,
+                )
+
+                # exclude current allocation's own old items during update
+                if self.instance:
+                    existing_items = existing_items.exclude(
+                        workload_allocation=self.instance
+                    )
+
+                existing_total = existing_items.aggregate(total=Sum("percentage"))["total"] or Decimal("0")
+
+                if existing_total + percentage > Decimal("100"):
+                    raise serializers.ValidationError(
+                        {
+                            "teaching_items": (
+                                f"Module '{module.name}' exceeds 100% allocation for this academic year. "
+                                f"Existing total: {existing_total}%, attempted add: {percentage}%."
+                            )
+                        }
                     )
 
         return attrs

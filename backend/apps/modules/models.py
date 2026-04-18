@@ -1,19 +1,20 @@
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models import Sum
 
 from apps.departments.models import Department
 from apps.academics.models import Academic
-from django.core.exceptions import ValidationError
-from django.db.models import Sum
+
 
 class Module(models.Model):
-    code = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    code = models.CharField(max_length=20, unique=True)
     name = models.CharField(max_length=255)
     department = models.ForeignKey(
         Department,
         on_delete=models.CASCADE,
         related_name="modules",
     )
-    credit_hours = models.PositiveIntegerField()
+    credit_hours = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -23,7 +24,7 @@ class Module(models.Model):
         ordering = ["name"]
 
     def __str__(self):
-        return self.name or self.code or str(self.pk)
+        return f"{self.code} - {self.name}" if self.code else self.name
 
 
 class Eligibility(models.Model):
@@ -43,8 +44,9 @@ class Eligibility(models.Model):
         unique_together = [["academic", "module"]]
 
     def __str__(self):
-        return f"{self.academic} - {self.module}"
-    
+        return f"{self.academic} -> {self.module}"
+
+
 class ModuleTeachingAllocation(models.Model):
     module = models.ForeignKey(
         Module,
@@ -73,7 +75,6 @@ class ModuleTeachingAllocation(models.Model):
             academic_year=self.academic_year,
         )
 
-        # Exclude current instance when updating
         if self.pk:
             existing = existing.exclude(pk=self.pk)
 
@@ -82,11 +83,16 @@ class ModuleTeachingAllocation(models.Model):
 
         if total > 100:
             raise ValidationError(
-                f"Total allocation exceeds 100%. Current total: {total}%"
+                f"Total allocation for this module in this academic year exceeds 100%. Current total: {total}%"
+            )
+
+        if self.academic.department_id != self.module.department_id:
+            raise ValidationError(
+                "Academic and module must belong to the same department."
             )
 
     def save(self, *args, **kwargs):
-        self.clean()  # 🔥 enforce validation everywhere (admin + API)
+        self.clean()
         super().save(*args, **kwargs)
 
     def __str__(self):
