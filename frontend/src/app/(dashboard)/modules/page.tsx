@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { api, type Module as ModuleType } from "@/lib/api";
+import { Academic, AcademicYear, api, type Module as ModuleType } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,12 @@ export default function ModulesPage() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ code: "", name: "", department: 0, credit_hours: 15, is_active: true });
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+  const [allocations, setAllocations] = useState<
+    { academic: number; percentage: number }[]
+  >([{ academic: 0, percentage: 100 }]);
+  const [selectedYearId, setSelectedYearId] = useState<number>(0);
+  const [years, setYears] = useState<AcademicYear[]>([]);
+  const [academics, setAcademics] = useState<Academic[]>([]);
 
   const load = () => {
     if (!token) return;
@@ -50,6 +56,33 @@ export default function ModulesPage() {
     return () => clearTimeout(t);
   }, [token, search, ordering]);
 
+  useEffect(() => {
+    if (!token) return;
+
+    const loadExtraData = async () => {
+      try {
+        const [academicRes, yearRes] = await Promise.all([
+          api.academics.list(token),
+          api.years.list(token),
+        ]);
+
+        setAcademics(academicRes.results || academicRes);
+        setYears(yearRes.results || yearRes);
+
+        // auto select first year if not selected
+        if ((yearRes.results || yearRes).length > 0 && !selectedYearId) {
+          const firstYear = (yearRes.results || yearRes)[0];
+          setSelectedYearId(firstYear.id);
+        }
+
+      } catch (err) {
+        console.error("Failed to load academics/years", err);
+      }
+    };
+
+    loadExtraData();
+  }, [token]);
+
   const openEdit = (m: ModuleType) => {
     setEditing(m);
     setForm({
@@ -72,13 +105,45 @@ export default function ModulesPage() {
       is_active: true,
     });
   };
+  const totalAllocationPercentage = allocations.reduce(
+    (sum, row) => sum + (Number(row.percentage) || 0),
+    0
+  );
+
+  const hasDuplicateAcademic = allocations.some((row, index) => {
+    if (!row.academic) return false;
+    return allocations.findIndex((x) => x.academic === row.academic) !== index;
+  });
+
+  const hasEmptyAcademic = allocations.some((row) => !row.academic);
+
+  const allocationError =
+    hasDuplicateAcademic
+      ? "The same academic cannot be added more than once."
+      : hasEmptyAcademic
+        ? "Please select an academic for every allocation row."
+        : totalAllocationPercentage !== 100
+          ? `Total allocation must be exactly 100%. Current total: ${totalAllocationPercentage}%.`
+          : null;
 
   const save = async () => {
     if (!token) return;
+    if (!selectedYearId) {
+      alert("Please select an academic year.");
+      return;
+    }
+
+    if (allocationError) {
+      alert(allocationError);
+      return;
+    }
+
     try {
       const payload = { ...form, code: form.code || undefined };
+
       if (editing) {
         await api.modules.update(token, editing.id, payload);
+
         setModules((prev) =>
           prev.map((x) =>
             x.id === editing.id
@@ -86,13 +151,36 @@ export default function ModulesPage() {
               : x
           )
         );
+
         setEditing(null);
+
       } else if (creating) {
+
+        // ✅ STEP 1: create module
         const created = await api.modules.create(token, payload);
+
         setModules((prev) => [...prev, created]);
+
+        // ✅ STEP 2: create allocations
+        for (const row of allocations) {
+          if (!row.academic) continue;
+
+          await api.moduleTeachingAllocations.create(token, {
+            module: created.id,
+            academic: row.academic,
+            academic_year: selectedYearId, // MUST EXIST
+            percentage: row.percentage,
+          });
+        }
+
+        // ✅ reset UI
+        setAllocations([{ academic: 0, percentage: 100 }]);
+
         setCreating(false);
       }
+
       load();
+
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to save");
     }
@@ -192,6 +280,99 @@ export default function ModulesPage() {
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>Academic Year</Label>
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                value={selectedYearId}
+                onChange={(e) => setSelectedYearId(Number(e.target.value))}
+              >
+                <option value={0}>Select Year</option>
+                {years.map((y) => (
+                  <option key={y.id} value={y.id}>
+                    {y.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-3">
+              <Label>Teaching Allocation</Label>
+
+              {allocations.map((row, index) => (
+                <div key={index} className="flex gap-2 items-center">
+                  <select
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                    value={row.academic}
+                    onChange={(e) => {
+                      const updated = [...allocations];
+                      updated[index].academic = Number(e.target.value);
+                      setAllocations(updated);
+                    }}
+                  >
+                    <option value={0}>Select Academic</option>
+                    {academics.map((a: Academic) => (
+                      <option key={a.id} value={a.id}>
+                        {a.full_name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={row.percentage}
+                    onChange={(e) => {
+                      const updated = [...allocations];
+                      updated[index].percentage = Number(e.target.value) || 0;
+                      setAllocations(updated);
+                    }}
+                    className="w-28"
+                  />
+
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={() => {
+                      if (allocations.length === 1) {
+                        setAllocations([{ academic: 0, percentage: 100 }]);
+                        return;
+                      }
+                      setAllocations((prev) => prev.filter((_, i) => i !== index));
+                    }}
+                  >
+                    X
+                  </Button>
+                </div>
+              ))}
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setAllocations((prev) => [...prev, { academic: 0, percentage: 100 }])
+                }
+              >
+                + Add Academic
+              </Button>
+
+              <div className="text-sm">
+                <span className="font-medium">Current total:</span>{" "}
+                <span
+                  className={
+                    totalAllocationPercentage === 100
+                      ? "text-emerald-600"
+                      : "text-destructive"
+                  }
+                >
+                  {totalAllocationPercentage}%
+                </span>
+              </div>
+
+              {allocationError && (
+                <p className="text-sm text-destructive">{allocationError}</p>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -204,7 +385,14 @@ export default function ModulesPage() {
             </div>
             <div className="flex gap-2">
               <Button onClick={save}>Save</Button>
-              <Button variant="outline" onClick={() => { setEditing(null); setCreating(false); }}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditing(null);
+                  setCreating(false);
+                  setAllocations([{ academic: 0, percentage: 100 }]);
+                }}
+              >
                 Cancel
               </Button>
             </div>

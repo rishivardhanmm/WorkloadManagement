@@ -16,7 +16,7 @@ from apps.allocations.services import (
 )
 from apps.departments.models import Department
 from apps.academics.models import Academic
-
+from apps.modules.models import ModuleTeachingAllocation
 
 def get_admin_summary(academic_year_id: int) -> Dict[str, Any]:
     """Department summary cards and status counts for admin dashboard."""
@@ -151,7 +151,21 @@ def get_admin_academics_breakdown(
         rows.sort(key=lambda r: (r["full_name"], r["academic_id"]))
 
     return rows
+def get_module_teaching_hours_for_academic(academic_id: int, academic_year_id: int) -> Decimal:
+    allocations = ModuleTeachingAllocation.objects.filter(
+        academic_id=academic_id,
+        academic_year_id=academic_year_id,
+        module__is_active=True,
+        academic__is_active=True,
+    ).select_related("module")
 
+    total = Decimal("0")
+    for row in allocations:
+        module_hours = Decimal(str(row.module.credit_hours))
+        percentage = Decimal(str(row.percentage))
+        total += module_hours * (percentage / Decimal("100"))
+
+    return total
 
 def get_academic_my_workload(user_id: int, academic_year_id: int) -> Optional[Dict[str, Any]]:
     """Single academic's workload for the year (for logged-in academic)."""
@@ -165,31 +179,22 @@ def get_academic_my_workload(user_id: int, academic_year_id: int) -> Optional[Di
         academic_year_id=academic_year_id,
     ).select_related("academic_year").first()
 
-    if not allocation:
-        return {
-            "academic_id": academic.id,
-            "academic_year_id": academic_year_id,
-            "teaching_hours": 0,
-            "research_hours": 0,
-            "admin_hours": 0,
-            "total_hours": 0,
-            "capacity_hours": academic.capacity_hours,
-            "utilisation": 0.0,
-            "difference": -academic.capacity_hours,
-            "status": "UNDERLOADED",
-        }
+    teaching_hours = get_module_teaching_hours_for_academic(academic.id, academic_year_id)
+    research_hours = allocation.research_hours if allocation else Decimal("0")
+    admin_hours = allocation.admin_hours if allocation else Decimal("0")
 
     total = calculate_total_hours(
-        allocation.teaching_hours,
-        allocation.research_hours,
-        allocation.admin_hours,
+        teaching_hours,
+        research_hours,
+        admin_hours,
     )
+
     return {
         "academic_id": academic.id,
         "academic_year_id": academic_year_id,
-        "teaching_hours": float(allocation.teaching_hours),
-        "research_hours": float(allocation.research_hours),
-        "admin_hours": float(allocation.admin_hours),
+        "teaching_hours": float(teaching_hours),
+        "research_hours": float(research_hours),
+        "admin_hours": float(admin_hours),
         "total_hours": float(total),
         "capacity_hours": academic.capacity_hours,
         "utilisation": round(
