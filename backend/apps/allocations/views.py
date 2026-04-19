@@ -1,6 +1,9 @@
 from django.db.models import Q
 from rest_framework import status
-from rest_framework.generics import ListAPIView, ListCreateAPIView, RetrieveUpdateDestroyAPIView
+from rest_framework.generics import (
+    ListCreateAPIView,
+    RetrieveUpdateDestroyAPIView,
+)
 from rest_framework.response import Response
 
 from apps.users.permissions import IsAdminRole
@@ -115,29 +118,61 @@ class WorkloadAllocationDetailView(RetrieveUpdateDestroyAPIView):
         return Response(read_serializer.data, status=status.HTTP_200_OK)
 
 
-class ResearchRoleListView(ListAPIView):
+class ResearchRoleListCreateView(ListCreateAPIView):
     permission_classes = [IsAdminRole]
     serializer_class = ResearchRoleSerializer
 
     def get_queryset(self):
-        qs = ResearchRole.objects.select_related("department").filter(is_active=True)
+        qs = ResearchRole.objects.select_related("department").all()
 
         department = self.request.query_params.get("department")
         if department:
             qs = qs.filter(department_id=department)
 
+        is_active = self.request.query_params.get("is_active")
+        if is_active == "true":
+            qs = qs.filter(is_active=True)
+        elif is_active == "false":
+            qs = qs.filter(is_active=False)
+
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(name__icontains=search)
+
         return qs.order_by("name")
 
 
-class AdminRoleListView(ListAPIView):
+class ResearchRoleDetailView(RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAdminRole]
+    queryset = ResearchRole.objects.select_related("department").all()
+    serializer_class = ResearchRoleSerializer
+
+
+class AdminRoleListCreateView(ListCreateAPIView):
     permission_classes = [IsAdminRole]
     serializer_class = AdminRoleSerializer
 
     def get_queryset(self):
-        qs = AdminRole.objects.select_related("department").filter(is_active=True)
+        qs = AdminRole.objects.select_related("department").all()
 
         department = self.request.query_params.get("department")
         if department:
             qs = qs.filter(department_id=department)
 
+        is_active = self.request.query_params.get("is_active")
+        if is_active == "true":
+            qs = qs.filter(is_active=True)
+        elif is_active == "false":
+            qs = qs.filter(is_active=False)
+
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(name__icontains=search)
+
         return qs.order_by("name")
+
+
+class AdminRoleDetailView(RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAdminRole]
+    queryset = AdminRole.objects.select_related("department").all()
+    serializer_class = AdminRoleSerializer

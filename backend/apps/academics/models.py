@@ -13,7 +13,7 @@ class Academic(models.Model):
         related_name="academic_profile",
     )
     full_name = models.CharField(max_length=255)
-    email = models.EmailField(unique=True)
+    email = models.EmailField(null=True, blank=True)
     department = models.ForeignKey(
         Department,
         on_delete=models.CASCADE,

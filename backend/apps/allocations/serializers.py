@@ -50,10 +50,76 @@ class TeachingAllocationItemWriteSerializer(serializers.Serializer):
         return value
 
 
+class ResearchRoleAllocationSummarySerializer(serializers.Serializer):
+    academic_id = serializers.IntegerField()
+    academic_name = serializers.CharField()
+    academic_year_id = serializers.IntegerField()
+    academic_year_label = serializers.CharField()
+    percentage = serializers.DecimalField(max_digits=5, decimal_places=2)
+    calculated_hours = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
 class ResearchRoleSerializer(serializers.ModelSerializer):
+    allocation_breakdown = serializers.SerializerMethodField()
+    is_allocated = serializers.SerializerMethodField()
+    allocated_hours = serializers.SerializerMethodField()
+
     class Meta:
         model = ResearchRole
-        fields = ["id", "name", "department", "expected_hours", "is_active"]
+        fields = [
+            "id",
+            "name",
+            "department",
+            "expected_hours",
+            "is_active",
+            "is_allocated",
+            "allocated_hours",
+            "allocation_breakdown",
+        ]
+
+    def _get_items_qs(self, obj):
+        from .models import ResearchAllocationItem
+
+        request = self.context.get("request")
+        academic_year = request.query_params.get("academic_year") if request else None
+
+        qs = ResearchAllocationItem.objects.select_related(
+            "workload_allocation",
+            "workload_allocation__academic",
+            "workload_allocation__academic_year",
+            "research_role",
+        ).filter(research_role=obj)
+
+        if academic_year:
+            qs = qs.filter(workload_allocation__academic_year_id=academic_year)
+
+        return qs
+
+    def get_is_allocated(self, obj):
+        return self._get_items_qs(obj).exists()
+
+    def get_allocated_hours(self, obj):
+        total = Decimal("0")
+        for item in self._get_items_qs(obj):
+            total += Decimal(str(item.calculated_hours))
+        return float(total)
+
+    def get_allocation_breakdown(self, obj):
+        data = []
+        for item in self._get_items_qs(obj):
+            academic = item.workload_allocation.academic
+            academic_year = item.workload_allocation.academic_year
+            data.append(
+                {
+                    "academic_id": academic.id,
+                    "academic_name": academic.full_name,
+                    "academic_year_id": academic_year.id,
+                    "academic_year_label": getattr(academic_year, "label", str(academic_year)),
+                    "percentage": item.percentage,
+                    "calculated_hours": item.calculated_hours,
+                }
+            )
+        return ResearchRoleAllocationSummarySerializer(data, many=True).data
 
 
 class ResearchAllocationItemSerializer(serializers.ModelSerializer):
@@ -82,10 +148,76 @@ class ResearchAllocationItemWriteSerializer(serializers.Serializer):
         return value
 
 
+class AdminRoleAllocationSummarySerializer(serializers.Serializer):
+    academic_id = serializers.IntegerField()
+    academic_name = serializers.CharField()
+    academic_year_id = serializers.IntegerField()
+    academic_year_label = serializers.CharField()
+    percentage = serializers.DecimalField(max_digits=5, decimal_places=2)
+    calculated_hours = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
 class AdminRoleSerializer(serializers.ModelSerializer):
+    allocation_breakdown = serializers.SerializerMethodField()
+    is_allocated = serializers.SerializerMethodField()
+    allocated_hours = serializers.SerializerMethodField()
+
     class Meta:
         model = AdminRole
-        fields = ["id", "name", "department", "expected_hours", "is_active"]
+        fields = [
+            "id",
+            "name",
+            "department",
+            "expected_hours",
+            "is_active",
+            "is_allocated",
+            "allocated_hours",
+            "allocation_breakdown",
+        ]
+
+    def _get_items_qs(self, obj):
+        from .models import AdminAllocationItem
+
+        request = self.context.get("request")
+        academic_year = request.query_params.get("academic_year") if request else None
+
+        qs = AdminAllocationItem.objects.select_related(
+            "workload_allocation",
+            "workload_allocation__academic",
+            "workload_allocation__academic_year",
+            "admin_role",
+        ).filter(admin_role=obj)
+
+        if academic_year:
+            qs = qs.filter(workload_allocation__academic_year_id=academic_year)
+
+        return qs
+
+    def get_is_allocated(self, obj):
+        return self._get_items_qs(obj).exists()
+
+    def get_allocated_hours(self, obj):
+        total = Decimal("0")
+        for item in self._get_items_qs(obj):
+            total += Decimal(str(item.calculated_hours))
+        return float(total)
+
+    def get_allocation_breakdown(self, obj):
+        data = []
+        for item in self._get_items_qs(obj):
+            academic = item.workload_allocation.academic
+            academic_year = item.workload_allocation.academic_year
+            data.append(
+                {
+                    "academic_id": academic.id,
+                    "academic_name": academic.full_name,
+                    "academic_year_id": academic_year.id,
+                    "academic_year_label": getattr(academic_year, "label", str(academic_year)),
+                    "percentage": item.percentage,
+                    "calculated_hours": item.calculated_hours,
+                }
+            )
+        return AdminRoleAllocationSummarySerializer(data, many=True).data
 
 
 class AdminAllocationItemSerializer(serializers.ModelSerializer):

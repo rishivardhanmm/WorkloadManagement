@@ -45,7 +45,7 @@ export default function AcademicsPage() {
   
   const [usernameTouched, setUsernameTouched] = useState(false);
 
-  const normalizeValue = (value: string) => value.trim().toLowerCase();
+  const normalizeValue = (value?: string | null) => (value ?? "").trim().toLowerCase();
 
   const normalizedUsername = normalizeValue(form.username);
   const normalizedEmail = normalizeValue(form.email);
@@ -55,10 +55,7 @@ export default function AcademicsPage() {
     return normalizeValue(a.username) === normalizedUsername;
   });
 
-  const duplicateEmail = academics.some((a: Academic) => {
-    if (editing && a.id === editing.id) return false;
-    return normalizeValue(a.email) === normalizedEmail;
-  });
+
 
   function buildUsernameCandidates(firstName: string, lastName: string) {
     const first = firstName.trim();
@@ -154,7 +151,7 @@ export default function AcademicsPage() {
       first_name: a.first_name ?? "",
       last_name: a.last_name ?? "",
       username: a.username ?? "",
-      email: a.email,
+      email: a.email ?? "",
       department: a.department,
       capacity_hours: a.capacity_hours,
       is_active: a.is_active,
@@ -202,10 +199,7 @@ export default function AcademicsPage() {
       return;
     }
 
-    if (!editing && duplicateEmail) {
-      setFormError("Email already exists. Try another one.");
-      return;
-    }
+    
 
     const payload = {
       first_name: form.first_name.trim(),

@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+const API_BASE = "http://127.0.0.1:8000/api";
 
 export function getApiBase(): string {
   if (typeof process.env.NEXT_PUBLIC_API_URL !== "undefined" && process.env.NEXT_PUBLIC_API_URL) {
@@ -143,15 +143,18 @@ export const api = {
       request(`/api/modules/${id}`, { method: "DELETE", token }),
   },
   researchRoles: {
-    list: (token: string, params?: { department?: number }) => {
+    list: (token: string, params?: { department?: number; academic_year?: number }) => {
       const query = new URLSearchParams();
 
       if (params?.department) {
         query.append("department", String(params.department));
       }
+      if (params?.academic_year) {
+        query.append("academic_year", String(params.academic_year));
+      }
 
       return fetch(
-        `${API_BASE_URL}/research-roles/${query.toString() ? `?${query}` : ""}`,
+        `${API_BASE}/research-roles/${query.toString() ? `?${query}` : ""}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -162,18 +165,48 @@ export const api = {
         return res.json();
       });
     },
+
+    create: (
+      token: string,
+      data: { name: string; department: number; expected_hours: number; is_active: boolean }
+    ) =>
+      request(`/api/research-roles/`, {
+        method: "POST",
+        body: data,
+        token,
+      }),
+
+    update: (
+      token: string,
+      id: number,
+      data: Partial<{ name: string; department: number; expected_hours: number; is_active: boolean }>
+    ) =>
+      request(`/api/research-roles/${id}/`, {
+        method: "PATCH",
+        body: data,
+        token,
+      }),
+
+    delete: (token: string, id: number) =>
+      request(`/api/research-roles/${id}/`, {
+        method: "DELETE",
+        token,
+      }),
   },
 
   adminRoles: {
-    list: (token: string, params?: { department?: number }) => {
+    list: (token: string, params?: { department?: number; academic_year?: number }) => {
       const query = new URLSearchParams();
 
       if (params?.department) {
         query.append("department", String(params.department));
       }
+      if (params?.academic_year) {
+        query.append("academic_year", String(params.academic_year));
+      }
 
       return fetch(
-        `${API_BASE_URL}/admin-roles/${query.toString() ? `?${query}` : ""}`,
+        `${API_BASE}/admin-roles/${query.toString() ? `?${query}` : ""}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -184,6 +217,33 @@ export const api = {
         return res.json();
       });
     },
+
+    create: (
+      token: string,
+      data: { name: string; department: number; expected_hours: number; is_active: boolean }
+    ) =>
+      request(`/api/admin-roles/`, {
+        method: "POST",
+        body: data,
+        token,
+      }),
+
+    update: (
+      token: string,
+      id: number,
+      data: Partial<{ name: string; department: number; expected_hours: number; is_active: boolean }>
+    ) =>
+      request(`/api/admin-roles/${id}/`, {
+        method: "PATCH",
+        body: data,
+        token,
+      }),
+
+    delete: (token: string, id: number) =>
+      request(`/api/admin-roles/${id}/`, {
+        method: "DELETE",
+        token,
+      }),
   },
   allocations: {
     list: (
@@ -387,24 +447,74 @@ export interface ModuleTeachingAllocationPayload {
   percentage: number;
 }
 
-export interface WorkloadAllocation {
+export type WorkloadAllocation = {
   id: number;
   academic: number;
-  academic_detail?: Academic;
+  academic_detail?: {
+    id: number;
+    full_name: string;
+    email: string;
+    department: number;
+    department_detail?: {
+      id: number;
+      name: string;
+    };
+    capacity_hours: number;
+    is_active: boolean;
+  };
   academic_year: number;
-  academic_year_detail?: AcademicYear;
-  teaching_hours: string;
-  research_hours: string;
-  admin_hours: string;
+  academic_year_detail?: {
+    id: number;
+    label?: string;
+    year_name?: string;
+    is_locked?: boolean;
+  };
+  teaching_hours: number;
+  research_hours: number;
+  admin_hours: number;
   notes: string;
-  total_hours?: string;
+  teaching_items?: {
+    id: number;
+    module: number;
+    module_detail?: {
+      id: number;
+      code: string | null;
+      name: string;
+      credit_hours: number;
+    };
+    percentage: number;
+    calculated_hours: number;
+  }[];
+  research_items?: {
+    id: number;
+    research_role: number;
+    research_role_detail?: {
+      id: number;
+      name: string;
+      expected_hours: number;
+    };
+    percentage: number;
+    calculated_hours: number;
+  }[];
+  admin_items?: {
+    id: number;
+    admin_role: number;
+    admin_role_detail?: {
+      id: number;
+      name: string;
+      expected_hours: number;
+    };
+    percentage: number;
+    calculated_hours: number;
+  }[];
+  total_hours?: number;
   utilisation?: number;
   difference?: number;
-  status?: "OVERLOADED" | "UNDERLOADED" | "BALANCED";
+  status?: string;
   created_by_username?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-}
+  created_at?: string;
+  updated_at?: string;
+};
 
 export type AllocationTeachingItemWrite = {
   module: number;

@@ -30,6 +30,8 @@ const adminNav = [
   { href: "/modules", label: "Modules", icon: BookOpenCheck },
   { href: "/years", label: "Years", icon: Calendar },
   { href: "/allocations", label: "Allocations", icon: ClipboardList },
+  { href: "/research-roles", label: "Research Roles", icon: BookOpen },
+  { href: "/admin-roles", label: "Admin Roles", icon: BookOpen },
 ];
 
 const academicNav = [

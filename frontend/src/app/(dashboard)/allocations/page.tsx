@@ -5,7 +5,7 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { useYearId } from "@/components/providers/YearProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Save, X } from "lucide-react";
@@ -18,6 +18,14 @@ import {
   type Module,
   type Eligibility,
 } from "@/lib/api";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 export default function AllocationsPage() {
   const { token } = useAuth();
@@ -49,6 +57,9 @@ export default function AllocationsPage() {
   const [adminItems, setAdminItems] = useState<
     { admin_role: number; percentage: number }[]
   >([{ admin_role: 0, percentage: 100 }]);
+  const [activeCategory, setActiveCategory] = useState<
+    "Teaching" | "Research" | "Admin" | null
+  >(null);
 
   const [modules, setModules] = useState<Module[]>([]);
   const [eligibleModules, setEligibleModules] = useState<Module[]>([]);
@@ -70,21 +81,95 @@ export default function AllocationsPage() {
     return sum + hours;
   }, 0);
   const calculatedResearchHours = researchItems.reduce((sum, item) => {
-  const role = eligibleResearchRoles.find((r) => r.id === item.research_role);
-  if (!role) return sum;
+    const role = eligibleResearchRoles.find((r) => r.id === item.research_role);
+    if (!role) return sum;
 
-  const hours = Number(role.expected_hours || 0) * ((Number(item.percentage) || 0) / 100);
-  return sum + hours;
-}, 0);
+    const hours = Number(role.expected_hours || 0) * ((Number(item.percentage) || 0) / 100);
+    return sum + hours;
+  }, 0);
 
-const calculatedAdminHours = adminItems.reduce((sum, item) => {
-  const role = eligibleAdminRoles.find((r) => r.id === item.admin_role);
-  if (!role) return sum;
+  const calculatedAdminHours = adminItems.reduce((sum, item) => {
+    const role = eligibleAdminRoles.find((r) => r.id === item.admin_role);
+    if (!role) return sum;
 
-  const hours = Number(role.expected_hours || 0) * ((Number(item.percentage) || 0) / 100);
-  return sum + hours;
-}, 0);
+    const hours = Number(role.expected_hours || 0) * ((Number(item.percentage) || 0) / 100);
+    return sum + hours;
+  }, 0);
+  const allocationCapacity =
+    viewAllocation?.academic_detail?.capacity_hours ?? 1500;
 
+  const allocationUsedTeaching = parseFloat(String(viewAllocation?.teaching_hours ?? 0)) || 0;
+  const allocationUsedResearch = parseFloat(String(viewAllocation?.research_hours ?? 0)) || 0;
+  const allocationUsedAdmin = parseFloat(String(viewAllocation?.admin_hours ?? 0)) || 0;
+
+  const allocationUsedTotal =
+    allocationUsedTeaching + allocationUsedResearch + allocationUsedAdmin;
+
+  const allocationRemaining = Math.max(0, allocationCapacity - allocationUsedTotal);
+
+  const allocationPieData = [
+    { name: "Teaching", value: allocationUsedTeaching },
+    { name: "Research", value: allocationUsedResearch },
+    { name: "Admin", value: allocationUsedAdmin },
+    { name: "Remaining", value: allocationRemaining },
+  ].filter((item) => item.value > 0);
+  const allocationTotalForChart =
+    allocationUsedTeaching +
+    allocationUsedResearch +
+    allocationUsedAdmin +
+    allocationRemaining;
+  
+  let detailedData: { name: string; value: number }[] = [];
+
+  if (activeCategory === "Teaching") {
+    detailedData =
+      viewAllocation?.teaching_items?.map((item) => ({
+        name:
+          item.module_detail?.code
+            ? `${item.module_detail.code}`
+            : item.module_detail?.name || "Module",
+        value: item.calculated_hours,
+      })) || [];
+  }
+
+  if (activeCategory === "Research") {
+    detailedData =
+      viewAllocation?.research_items?.map((item) => ({
+        name: item.research_role_detail?.name || "Research",
+        value: item.calculated_hours,
+      })) || [];
+  }
+
+  if (activeCategory === "Admin") {
+    detailedData =
+      viewAllocation?.admin_items?.map((item) => ({
+        name: item.admin_role_detail?.name || "Admin",
+        value: item.calculated_hours,
+      })) || [];
+  }
+    const getPercent = (value: number) => {
+    if (!allocationTotalForChart) return 0;
+    return ((value / allocationTotalForChart) * 100).toFixed(1);
+  };
+
+  const allocationPieColors = ["#3b82f6", "#10b981", "#f59e0b", "#9ca3af"];
+  const getPieData = (allocation: WorkloadAllocation) => {
+    const capacity = allocation.academic_detail?.capacity_hours || 1500;
+
+    const teaching = Number(allocation.teaching_hours || 0);
+    const research = Number(allocation.research_hours || 0);
+    const admin = Number(allocation.admin_hours || 0);
+
+    const used = teaching + research + admin;
+    const remaining = Math.max(capacity - used, 0);
+
+    return [
+      { name: "Teaching", value: teaching },
+      { name: "Research", value: research },
+      { name: "Admin", value: admin },
+      { name: "Remaining", value: remaining },
+    ];
+  };
   const selectedYear = years.find((y) => y.id === yearId);
   const isLocked = selectedYear?.is_locked ?? false;
   
@@ -184,23 +269,19 @@ const calculatedAdminHours = adminItems.reduce((sum, item) => {
 
   const saveEdit = async () => {
     if (!token || editingId == null) return;
+
     setSaving(true);
     setError(null);
+
     try {
       await api.allocations.update(token, editingId, editForm);
-      setAllocations((prev) =>
-        prev.map((x) =>
-          x.id === editingId
-            ? {
-                ...x,
-                teaching_hours: String(editForm.teaching_hours),
-                research_hours: String(editForm.research_hours),
-                admin_hours: String(editForm.admin_hours),
-                notes: editForm.notes,
-              }
-            : x
-        )
-      );
+
+      const refreshed = await api.allocations.list(token, {
+        academic_year: yearId ?? undefined,
+        department: deptFilter || undefined,
+      });
+
+      setAllocations(refreshed.results || []);
       setEditingId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");
@@ -741,53 +822,243 @@ const calculatedAdminHours = adminItems.reduce((sum, item) => {
       </Card>
 
       {viewAllocation && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => setViewAllocation(null)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <Card
-            className="max-w-md w-full mx-4 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <CardContent className="pt-6 space-y-3">
-              <div className="flex justify-between items-center">
-                <h3 className="font-semibold">Allocation details</h3>
-                <Button variant="ghost" size="sm" onClick={() => setViewAllocation(null)}>
-                  <X className="h-4 w-4" />
-                </Button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border bg-background p-6 shadow-xl">
+            <div className="mb-6 flex items-start justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold">
+                  {viewAllocation.academic_detail?.full_name ?? `Academic ${viewAllocation.academic}`}
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {viewAllocation.academic_year_detail?.label ??
+                    viewAllocation.academic_year_detail?.year_name ??
+                    `Year ${viewAllocation.academic_year}`}
+                </p>
               </div>
-              <p><span className="text-muted-foreground">Academic:</span> {viewAllocation.academic_detail?.full_name ?? viewAllocation.academic}</p>
-              <p><span className="text-muted-foreground">Year:</span> {viewAllocation.academic_year_detail?.label ?? viewAllocation.academic_year}</p>
-              <p><span className="text-muted-foreground">Teaching / Research / Admin:</span> {viewAllocation.teaching_hours} / {viewAllocation.research_hours} / {viewAllocation.admin_hours}</p>
-              {viewAllocation.status && (
-                <p>
-                  <span className="text-muted-foreground">Status:</span>{" "}
-                  <Badge
-                    variant={
-                      viewAllocation.status === "OVERLOADED"
-                        ? "overloaded"
-                        : viewAllocation.status === "UNDERLOADED"
-                          ? "underloaded"
-                          : "balanced"
-                    }
-                  >
-                    {viewAllocation.status}
-                  </Badge>
-                </p>
-              )}
-              {(viewAllocation.created_by_username != null || viewAllocation.updated_at) && (
-                <p className="text-xs text-muted-foreground pt-2 border-t">
-                  {viewAllocation.created_by_username != null && <>Created by {viewAllocation.created_by_username}</>}
-                  {viewAllocation.created_by_username != null && viewAllocation.updated_at && " · "}
-                  {viewAllocation.updated_at && (
-                    <>Last updated {new Date(viewAllocation.updated_at).toLocaleString()}</>
+
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setViewAllocation(null);
+                  setActiveCategory(null);
+                }}
+              >
+                Close
+              </Button>
+            </div>
+
+            
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Workload distribution</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={allocationPieData}
+                          dataKey="value"
+                          nameKey="name"
+                          outerRadius={110}
+                          onClick={(data) => {
+                            if (data?.name === "Remaining") return;
+                            setActiveCategory(data?.name);
+                          }}
+                          label={({ name, value }) =>
+                            `${name}: ${value} (${getPercent(value)}%)`
+                          }
+                        >
+                          {allocationPieData.map((_, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={allocationPieColors[index % allocationPieColors.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value: number) => [
+                            `${value} hrs (${getPercent(value)}%)`,
+                            "Workload",
+                          ]}
+                        />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {activeCategory && detailedData.length > 0 && (
+                    <Card className="mt-6">
+                      <CardHeader>
+                        <CardTitle>{activeCategory} Breakdown</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="h-[300px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={detailedData}
+                                dataKey="value"
+                                nameKey="name"
+                                outerRadius={100}
+                                label={({ name, value }) => `${name}: ${value}`}
+                              >
+                                {detailedData.map((_, index) => (
+                                  <Cell
+                                    key={index}
+                                    fill={allocationPieColors[index % allocationPieColors.length]}
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(value: number) => [`${value} hrs`, ""]} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </CardContent>
+                    </Card>
                   )}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Summary</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Capacity</span>
+                    <span className="font-medium">{allocationCapacity}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Teaching</span>
+                    <span className="font-medium">{allocationUsedTeaching}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Research</span>
+                    <span className="font-medium">{allocationUsedResearch}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Admin</span>
+                    <span className="font-medium">{allocationUsedAdmin}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Remaining</span>
+                    <span className="font-medium">{allocationRemaining}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Total</span>
+                    <span className="font-medium">{allocationUsedTotal}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Teaching breakdown</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {viewAllocation.teaching_items && viewAllocation.teaching_items.length > 0 ? (
+                    viewAllocation.teaching_items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                      >
+                        <div>
+                          <div className="font-medium">
+                            {item.module_detail?.code
+                              ? `${item.module_detail.code} - ${item.module_detail.name}`
+                              : item.module_detail?.name ?? `Module ${item.module}`}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {item.percentage}% of module
+                          </div>
+                        </div>
+                        <div className="text-right font-medium">
+                          {item.calculated_hours} hrs
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No teaching allocation.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Research breakdown</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {viewAllocation.research_items && viewAllocation.research_items.length > 0 ? (
+                    viewAllocation.research_items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                      >
+                        <div>
+                          <div className="font-medium">
+                            {item.research_role_detail?.name ?? `Research Role ${item.research_role}`}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {item.percentage}% of role
+                          </div>
+                        </div>
+                        <div className="text-right font-medium">
+                          {item.calculated_hours} hrs
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No research allocation.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Admin breakdown</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {viewAllocation.admin_items && viewAllocation.admin_items.length > 0 ? (
+                    viewAllocation.admin_items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                      >
+                        <div>
+                          <div className="font-medium">
+                            {item.admin_role_detail?.name ?? `Admin Role ${item.admin_role}`}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {item.percentage}% of role
+                          </div>
+                        </div>
+                        <div className="text-right font-medium">
+                          {item.calculated_hours} hrs
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No admin allocation.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {viewAllocation.notes ? (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Notes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm">{viewAllocation.notes}</p>
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
         </div>
       )}
     </div>
