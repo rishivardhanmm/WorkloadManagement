@@ -81,41 +81,77 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const nav = user.role === "ADMIN" ? adminNav : academicNav;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b bg-card">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-center gap-6">
-            <Link href={user.role === "ADMIN" ? "/dashboard" : "/my-workload"} className="text-lg font-semibold">
-              W Workload
-            </Link>
+    <div className="flex min-h-screen bg-background text-foreground">
+      {/* Sidebar */}
+      <aside className="hidden md:flex md:w-64 flex-col border-r bg-card">
+        <div className="border-b px-6 py-4">
+          <Link
+            href={user.role === "ADMIN" ? "/dashboard" : "/my-workload"}
+            className="flex items-center gap-3"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+              <ClipboardList className="h-5 w-5" />
+            </div>
 
-            <nav className="hidden items-center gap-2 md:flex">
-              {nav.map((item) => {
-                const Icon = item.icon;
-                const active =
-                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+            <div className="flex flex-col leading-tight">
+              <span className="text-sm font-semibold tracking-wide">Workload</span>
+              <span className="text-xs text-muted-foreground">Management System</span>
+            </div>
+          </Link>
+        </div>
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-                      active
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
+        <nav className="flex-1 px-3 py-4 space-y-1">
+          {nav.map((item) => {
+            const Icon = item.icon;
+            const active =
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
 
-          <div className="flex items-center gap-3">
-            {user.role === "ADMIN" && (
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="border-t p-3">
+          <Button
+            variant="destructive"
+            className="w-full"
+            onClick={() => {
+              logout();
+              router.push("/");
+            }}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Log out
+          </Button>
+        </div>
+      </aside>
+
+      {/* Main Area */}
+      <div className="flex flex-1 flex-col">
+        {/* Top Header */}
+        <header className="border-b bg-card">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">
+                {user.role === "ADMIN" ? "Admin Panel" : "Academic Panel"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Year Selector */}
               <div className="hidden items-center gap-2 md:flex">
                 <label className="text-sm text-muted-foreground">Year:</label>
                 {years.length > 0 ? (
@@ -126,7 +162,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     }
                     className="rounded-md border bg-background px-3 py-2 text-sm"
                   >
-                    <option value="">All years</option>
+                    {user.role === "ADMIN" && <option value="">All years</option>}
                     {years.map((y) => (
                       <option key={y.id} value={y.id}>
                         {y.label} {y.is_locked ? "(Locked)" : ""}
@@ -137,72 +173,56 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                   <span className="text-sm text-muted-foreground">Loading...</span>
                 )}
               </div>
-            )}
 
-            {user.role === "ACADEMIC" && (
-              <div className="hidden items-center gap-2 md:flex">
-                <label className="text-sm text-muted-foreground">Year:</label>
-                {years.length > 0 ? (
-                  <select
-                    value={yearId ?? ""}
-                    onChange={(e) =>
-                      setYearId(e.target.value ? Number(e.target.value) : null)
-                    }
-                    className="rounded-md border bg-background px-3 py-2 text-sm"
-                  >
-                    {years.map((y) => (
-                      <option key={y.id} value={y.id}>
-                        {y.label}
-                      </option>
-                    ))}
-                  </select>
+              {/* Theme */}
+              <Button variant="outline" size="icon" onClick={toggle}>
+                {theme === "dark" ? (
+                  <Sun className="h-4 w-4" />
                 ) : (
-                  <span className="text-sm text-muted-foreground">Loading...</span>
+                  <Moon className="h-4 w-4" />
                 )}
-              </div>
-            )}
-
-            <Button variant="outline" size="icon" onClick={toggle}>
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-
-            <div className="relative" ref={userRef}>
-              <Button
-                variant="outline"
-                className="flex items-center gap-2"
-                onClick={() => setUserOpen((o) => !o)}
-              >
-                <span>{user.username}</span>
-                <ChevronDown className="h-4 w-4" />
               </Button>
 
-              {userOpen && (
-                <div className="absolute right-0 z-50 mt-2 w-64 rounded-md border bg-popover p-3 shadow-lg">
-                  <div className="mb-3">
-                    <p className="font-medium">{user.username}</p>
-                    <p className="text-sm text-muted-foreground">{user.email}</p>
-                  </div>
+              {/* User */}
+              <div className="relative" ref={userRef}>
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  onClick={() => setUserOpen((o) => !o)}
+                >
+                  <span>{user.username}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
 
-                  <Button
-                    variant="destructive"
-                    className="w-full"
-                    onClick={() => {
-                      logout();
-                      setUserOpen(false);
-                      router.push("/");
-                    }}
-                  >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    Log out
-                  </Button>
-                </div>
-              )}
+                {userOpen && (
+                  <div className="absolute right-0 z-50 mt-2 w-64 rounded-md border bg-popover p-3 shadow-lg">
+                    <div className="mb-3">
+                      <p className="font-medium">{user.username}</p>
+                      <p className="text-sm text-muted-foreground">{user.email}</p>
+                    </div>
+
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={() => {
+                        logout();
+                        setUserOpen(false);
+                        router.push("/");
+                      }}
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Log out
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+        {/* Page Content */}
+        <main className="flex-1 px-6 py-6">{children}</main>
+      </div>
     </div>
   );
 }
