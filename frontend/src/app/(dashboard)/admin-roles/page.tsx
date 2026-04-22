@@ -180,7 +180,7 @@ export default function AdminRolesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Admin Roles</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Administration Roles</h1>
 
         <Button
           onClick={() => {
@@ -189,7 +189,7 @@ export default function AdminRolesPage() {
           }}
         >
           <Plus className="mr-1 h-4 w-4" />
-          Add Admin Role
+          Add Adminstration Role
         </Button>
       </div>
 
@@ -220,7 +220,7 @@ export default function AdminRolesPage() {
       {showCreate && (
         <Card>
           <CardHeader>
-            <CardTitle>Create Admin Role</CardTitle>
+            <CardTitle>Create Administration Role</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

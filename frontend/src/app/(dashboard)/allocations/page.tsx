@@ -694,13 +694,13 @@ export default function AllocationsPage() {
 
                 {!createForm.academic && (
                   <p className="text-sm text-muted-foreground">
-                    Select an academic first to see department admin roles.
+                    Select an academic first to see department administration roles.
                   </p>
                 )}
 
                 {createForm.academic && eligibleAdminRoles.length === 0 && (
                   <p className="text-sm text-destructive">
-                    No active admin roles found for the selected academic’s department.
+                    No active administration roles found for the selected academic’s department.
                   </p>
                 )}
               </div>
